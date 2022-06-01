@@ -17,23 +17,16 @@ import gzip
 
 
 def Parse_Auditlog(input_log):
-    if '.gz' in input_log:
-       logfile = gzip.open(input_log)
-    else:
-       logfile = open(input_log)
-
+    logfile = gzip.open(input_log) if '.gz' in input_log else open(input_log)
     loglines = logfile.readlines()
     logfile.close()
-    
+
     preparsed_lines = PreParse_Auditlog_Datetime_Lines(loglines)
-    #print preparsed_lines
-    regular_user_lines = Parse_Regular_User_lines(preparsed_lines)
-    return regular_user_lines
+    return Parse_Regular_User_lines(preparsed_lines)
 
 def Parse_Regular_User_lines(preparsed_lines):
     rdsdb_pat = re.compile(r'db=rdsdb')
-    regular_user_lines = [s for s in preparsed_lines if not rdsdb_pat.search(s)]
-    return regular_user_lines
+    return [s for s in preparsed_lines if not rdsdb_pat.search(s)]
 
 def Remove_Problem_Keywords(reg_user_lines):
     #problem_keywords = ['context: SQL', 'copy', 'insert', 'delete', 'drop',
@@ -44,25 +37,24 @@ def Remove_Problem_Keywords(reg_user_lines):
     problem_keywords = ['context: SQL', 'ERROR:', 'CONTEXT:  SQL', '$2', '$1',
                         'pg_table_def', 'pg_catalog','pg_class', 'pg_namespace',
                         'pg_attribute', 'pg_tables', 'show ', 'Undoing transaction', 'Undo on', 'pg_terminate_backend','pg_cancel_backend', 'volt_', 'pg_temp_' , 'BIND']
-    sanitizedList = []
-    for i in range(0, len(reg_user_lines), 1):
-        if not ( any(word in reg_user_lines[i] for word in problem_keywords)):
-            sanitizedList.append(reg_user_lines[i])
-        #else:
-        #    print "Else:" + reg_user_lines[i]
-    return sanitizedList
+    return [
+        reg_user_lines[i]
+        for i in range(len(reg_user_lines))
+        if all(word not in reg_user_lines[i] for word in problem_keywords)
+    ]
 
 def PreParse_Auditlog_Datetime_Lines(loglines_input):
     loglines = loglines_input[:]
     datetime_pat = re.compile(r'\d+-\d+-\d+T\d+:\d+:\d+Z UTC')
-    matchdatetime = []
-    for i in range(0,len(loglines), 1):
-        if datetime_pat.search(loglines[i]) is not None:
-            matchdatetime.append(i)
-            #print matchdatetime
+    matchdatetime = [
+        i
+        for i in range(len(loglines))
+        if datetime_pat.search(loglines[i]) is not None
+    ]
+
     linesremoved = 0
 
-    for i in range(0,len(matchdatetime)-1,1):
+    for i in range(len(matchdatetime)-1):
         if (matchdatetime[i+1] != matchdatetime[i] + 1):
             #print str(matchdatetime[i] - linesremoved) + " and " + str(matchdatetime[i+1] - linesremoved)
             loglines[matchdatetime[i]-linesremoved:matchdatetime[i+1]-linesremoved] = [''.join(loglines[matchdatetime[i]-linesremoved:matchdatetime[i+1]-linesremoved])]
@@ -112,44 +104,55 @@ def Print_Human_Readable(queryObjList, creds, rewrites, readonly):
     skip_rewrites = [ 'SELECT ', 'UPDATE ', 'INSERT INTO ', 'DELETE FROM ', 'CREATE TEMP TABLE ','WITH ']
     avoid_skipping = [ 'SELECT *', ' BETWEEN ', 'LIKE ' ]
     dedupe_these = ['set ', 'select', 'create', 'delete', 'update', 'insert', 'SET ', 'SELECT', 'CREATE', 'DELETE', 'UPDATE', 'INSERT']
-    for i in range(0, len(queryObjList), 1):
+    for i in range(len(queryObjList)):
         if queryObjList[i].querystatement.endswith(tuple(skip_ends)):
            continue
-        fname = queryObjList[i].databasename + '-' + queryObjList[i].username + '-' + queryObjList[i].pid + '.sql'
-        rwname = 'rw-'+ fname
-        if rewrites and ';' in queryObjList[i].querystatement and queryObjList[i].querystatement.count('\n') == 1 and queryObjList[i].querystatement.startswith(tuple(skip_rewrites)) and not any(word in queryObjList[i].querystatement for word in avoid_skipping):
-           #print fname 
-           #print queryObjList[i].querystatement 
-           continue
+        fname = f'{queryObjList[i].databasename}-{queryObjList[i].username}-{queryObjList[i].pid}.sql'
+
+        rwname = f'rw-{fname}'
+        if (
+            rewrites
+            and ';' in queryObjList[i].querystatement
+            and queryObjList[i].querystatement.count('\n') == 1
+            and queryObjList[i].querystatement.startswith(tuple(skip_rewrites))
+            and all(
+                word not in queryObjList[i].querystatement
+                for word in avoid_skipping
+            )
+        ):
+            #print fname 
+            #print queryObjList[i].querystatement 
+            continue
         #
         if readonly and any(word.lower() in queryObjList[i].querystatement.lower() for word in rw_list):
-           if fname not in rw_files:
-              rw_files.append(fname)
-           rwname = 'rw-'+ fname
-           if os.path.isfile(fname):
-             os.rename(fname,rwname)
+            if fname not in rw_files:
+               rw_files.append(fname)
+            rwname = f'rw-{fname}'
+            if os.path.isfile(fname):
+              os.rename(fname,rwname)
         #
         if readonly and fname in rw_files:
           fname = rwname
         #
         firstTime = False
         if not os.path.isfile(fname):
-          setUser = 'set session_authorization to ' + queryObjList[i].username + ';\n'
-          firstTime = True 
-        else:
-          if  any(word in queryObjList[i].querystatement for word in dedupe_these):
-             if queryObjList[i].querystatement.endswith(tuple(';')) or queryObjList[i].querystatement in open(fname).read():
-                continue
-        #
-        f = open ( fname, 'a' )
-        if firstTime:
-          f.write ('--Starttime: ' + queryObjList[i].startdatetime + '\n')
-          f.write (setUser)
-        if  (creds and any(word in queryObjList[i].querystatement for word in creds_list)):
-           f.write(queryObjList[i].querystatement.replace("CREDENTIALS ''","CREDENTIALS '"+ creds + "'") + ";\n" )
-        else:
-           f.write( queryObjList[i].querystatement + ";\n" )
-        f.close()
+            setUser = f'set session_authorization to {queryObjList[i].username}' + ';\n'
+            firstTime = True
+        elif any(
+            word in queryObjList[i].querystatement for word in dedupe_these
+        ) and (
+            queryObjList[i].querystatement.endswith(tuple(';'))
+            or queryObjList[i].querystatement in open(fname).read()
+        ):
+            continue
+        with open ( fname, 'a' ) as f:
+            if firstTime:
+                f.write(f'--Starttime: {queryObjList[i].startdatetime}' + '\n')
+                f.write (setUser)
+            if  (creds and any(word in queryObjList[i].querystatement for word in creds_list)):
+               f.write(queryObjList[i].querystatement.replace("CREDENTIALS ''","CREDENTIALS '"+ creds + "'") + ";\n" )
+            else:
+               f.write( queryObjList[i].querystatement + ";\n" )
 
 def main(input_log, creds, rewrites, readonly):
     reg_user_lines = Parse_Auditlog(input_log)
@@ -169,7 +172,7 @@ class QueryObj:
         self.querystatement = querystatement
 
     def __str__(self):
-        return "Startdate: %s, Username: %s, USerid: %s Database Name: %s, Pid: %s, Xid: %s, Query Text: %s" % (self.startdatetime, self.username, self.userid, self.databasename, self.pid, self.xid, self.querystatement)
+        return f"Startdate: {self.startdatetime}, Username: {self.username}, USerid: {self.userid} Database Name: {self.databasename}, Pid: {self.pid}, Xid: {self.xid}, Query Text: {self.querystatement}"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

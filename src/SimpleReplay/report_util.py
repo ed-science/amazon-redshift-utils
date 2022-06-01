@@ -135,12 +135,19 @@ def later_pages(canvas, doc, report):
     canvas.saveState()
     canvas.setFont('Helvetica', 9)
     if report.cluster_details['Replay Tag'] == '':
-        canvas.drawCentredString(4.25 * inch, 10.5 * inch, f"Cluster id: {report.cluster.get('id')}      "
-                                                           f"Report generated: {datetime.today().date()}")
+        canvas.drawCentredString(
+            4.25 * inch,
+            10.5 * inch,
+            f"Cluster id: {report.cluster.get('id')}      Report generated: {datetime.now().date()}",
+        )
+
     else:
-        canvas.drawCentredString(4.25 * inch, 10.5 * inch, f"Cluster id: {report.cluster.get('id')}      "
-                                                           f"Replay tag: {report.cluster_details['Replay Tag']}      "
-                                                           f"Report generated: {datetime.today().date()}")
+        canvas.drawCentredString(
+            4.25 * inch,
+            10.5 * inch,
+            f"Cluster id: {report.cluster.get('id')}      Replay tag: {report.cluster_details['Replay Tag']}      Report generated: {datetime.now().date()}",
+        )
+
 
     canvas.drawString(0.5 * inch, 0.5 * inch, f"{doc.page}")
     canvas.drawCentredString(4.25 * inch, 0.5 * inch, "\u00A9 2021, Amazon Web Services, Inc. or its Affiliates. All "
@@ -183,8 +190,7 @@ def df_to_np(heading, df):
         output.append(heading)
     frame = df.reset_index(drop=True)
     frame = frame.truncate(after=100)
-    for e in np.array(frame).tolist():
-        output.append(e)
+    output.extend(iter(np.array(frame).tolist()))
     return output
 
 

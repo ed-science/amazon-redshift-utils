@@ -75,17 +75,15 @@ class ConfigParameterFactory:
 
     @staticmethod
     def is_bool_list(values_list):
-        if 'true' in values_list and 'false' in values_list and len(values_list) == 2:
-            return True
-        else:
-            return False
+        return (
+            'true' in values_list
+            and 'false' in values_list
+            and len(values_list) == 2
+        )
 
     @staticmethod
     def is_region_name_list(values_list):
-        if 'short-region-name' in values_list:
-            return True
-        else:
-            return False
+        return 'short-region-name' in values_list
 
 
 class DefaultConfigParameter(ConfigParameter):
@@ -119,10 +117,7 @@ class DefaultValueListConfigParameter(DefaultConfigParameter):
 
     def is_value_in_list(self, value):
         str_value = str(value)
-        if str_value.lower() in self.possible_values:
-            return True
-        else:
-            return False
+        return str_value.lower() in self.possible_values
 
     def check_is_value_in_list(self, value):
         if not self.is_value_in_list(value):
@@ -177,10 +172,7 @@ class DefaultBoolConfigParameter(DefaultConfigParameter):
     @staticmethod
     def is_bool(value):
         str_value = str(value)
-        if str_value.lower() == 'false' or str_value.lower() == 'true':
-            return True
-        else:
-            return False
+        return str_value.lower() in {'false', 'true'}
 
     @staticmethod
     def check_is_bool(value):
@@ -252,10 +244,10 @@ class GlobalConfigParametersReader:
 
     @staticmethod
     def get_key_value_dict(config_parameters_dict):
-        result = {}
-        for key in config_parameters_dict.keys():
-            result[key] = config_parameters_dict[key].get_value()
-        return result
+        return {
+            key: config_parameters_dict[key].get_value()
+            for key in config_parameters_dict.keys()
+        }
 
     def get_default_config_parameter_updated_with_cli_args(self, argv):
         if len(self.unprocessed_arguments) > 0:
@@ -265,9 +257,11 @@ class GlobalConfigParametersReader:
         while len(self.cli_arguments_to_process) > 0:
             cli_flag = self.cli_arguments_to_process.pop(0)
             if self.is_a_parameter_key_being_processed():
-                if cli_flag.startswith('--') \
-                        or (self.is_parameter_being_processed_a_bool() and
-                            (cli_flag.lower() != 'false' and cli_flag.lower() != 'true')):
+                if (
+                    cli_flag.startswith('--')
+                    or self.is_parameter_being_processed_a_bool()
+                    and cli_flag.lower() not in ['false', 'true']
+                ):
                     self.process_parameter_without_value()
                 else:
                     self.process_parameter_with_value(cli_flag)
@@ -322,9 +316,9 @@ class GlobalConfigParametersReader:
 
         next_is_upper = False
         for letter in cli_flag:
-            if letter == '-' and next_is_upper:
-                return None
             if letter == '-':
+                if next_is_upper:
+                    return None
                 next_is_upper = True
                 continue
 

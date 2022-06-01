@@ -9,13 +9,9 @@ class PGPassDetails:
         self.password = self.password.rstrip('\n')
 
     def __str__(self):
-        connect_string = 'host={h} port={p} user={u} dbname={db}'.format(
-            h=self.host,
-            p=self.port,
-            u=self.user,
-            db=self.database
+        return 'host={h} port={p} user={u} dbname={db}'.format(
+            h=self.host, p=self.port, u=self.user, db=self.database
         )
-        return connect_string
 
 
 class PGPassReader:

@@ -73,14 +73,14 @@ class UnloadCopyTool:
 
         src_config = self.config_helper.config['unloadSource']
         dest_config = self.config_helper.config['copyTarget']
-        if(src_config['tableNames']):
+        if src_config['tableNames']:
             src_tables = src_config['tableNames']
             dest_tables = dest_config['tableNames']
             logging.info("Migrating multiple tables")
             if( not dest_tables or len(src_tables) != len(dest_tables) ):
                 logging.fatal("When migrating multiple tables 'tableNames' property must be configured in unloadSource and copyTarget, and be the same length")
                 raise NotImplementedError
-            for idx in range(0,len(src_tables)):
+            for idx in range(len(src_tables)):
                 src_config['tableName'] = src_tables[idx]
                 dest_config['tableName'] = dest_tables[idx]
                 source = ResourceFactory.get_source_resource_from_config_helper(self.config_helper, self.region)
@@ -106,7 +106,6 @@ class UnloadCopyTool:
             else:
                 logging.fatal('Destination should be a database resource')
                 raise NotImplementedError
-            pass
         else:
             # TODO: add additional scenario's
             # For example if both resources are of type schema then create target schema and migrate all tables

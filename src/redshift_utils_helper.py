@@ -25,17 +25,14 @@ def put_metric(cw, namespace, metric_name, dimensions, timestamp, value, unit):
 # emit all the provided cloudwatch metrics consistent with API limits around batching
 def emit_metrics(cw, namespace, put_metrics):
     max_metrics = 20
-    group = 0
-    print("Publishing %s CloudWatch Metrics" % (len(put_metrics)))
+    print(f"Publishing {len(put_metrics)} CloudWatch Metrics")
 
-    for x in range(0, len(put_metrics), max_metrics):
-        group += 1
-
+    for group, x in enumerate(range(0, len(put_metrics), max_metrics), start=1):
         # slice the metrics into blocks of 20 or just the remaining metrics
         put = put_metrics[x:(x + max_metrics)]
 
         if debug:
-            print("Metrics group %s: %s Datapoints" % (group, len(put)))
+            print(f"Metrics group {group}: {len(put)} Datapoints")
             print(put)
         try:
             cw.put_metric_data(
@@ -43,7 +40,7 @@ def emit_metrics(cw, namespace, put_metrics):
                 MetricData=put
             )
         except:
-            print('Pushing metrics to CloudWatch failed: exception %s' % sys.exc_info()[1])
+            print(f'Pushing metrics to CloudWatch failed: exception {sys.exc_info()[1]}')
 
 def set_search_paths(conn, schema_name, set_target_schema=None, exclude_external_schemas=False):
     get_schemas_statement = '''
@@ -60,7 +57,7 @@ def set_search_paths(conn, schema_name, set_target_schema=None, exclude_external
 
     # add the target schema to the search path
     if set_target_schema is not None and set_target_schema != schema_name:
-        search_path = search_path + ', %s' % set_target_schema
+        search_path += f', {set_target_schema}'
 
     # add all matched schemas to the search path - this could be a single schema, or a pattern
     c = conn.cursor()
@@ -68,7 +65,7 @@ def set_search_paths(conn, schema_name, set_target_schema=None, exclude_external
     results = c.fetchall()
 
     for r in results:
-        search_path = search_path + ', %s' % r[0]
+        search_path = search_path + f', {r[0]}'
 
     if debug:
         print(search_path)

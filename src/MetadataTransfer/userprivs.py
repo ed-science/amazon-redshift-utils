@@ -25,9 +25,9 @@ grantdict = {
 def decodeprivs(privs):
         grants = privs
         # Break the aclitem into grantor, grantee and privileges
-        privs = re.search(r'=(.*?)/', grants).group(1)
-        grantee = re.search(r'^(.*?)=', grants).group(1)
-        grantor = re.search(r'/(.*?)$', grants).group(1)
+        privs = re.search(r'=(.*?)/', grants)[1]
+        grantee = re.search(r'^(.*?)=', grants)[1]
+        grantor = re.search(r'/(.*?)$', grants)[1]
         # Convert empty grantee to group PUBLIC
         if grantee == '':
             grantee = 'PUBLIC'
@@ -35,21 +35,21 @@ def decodeprivs(privs):
         decodenograntopt = []
         # Take privileges from aclitem and convert to corresponding grant keyword from dictionary
         if privs == 'arwdRxt':
-            decodenograntopt.append('ALL')
+                decodenograntopt.append('ALL')
         elif privs == 'a*r*w*d*R*x*t*':
             decodegrantopt.append('ALL')
         else:
-            a = re.compile(r'[arwdRxtXUCT]\*')
-            grantoption = [x.replace('*', '') for x in a.findall(privs)]
-            nograntoption = list(a.sub('', privs))
-            for i in grantoption:
-                decodegrantopt.append(grantdict[i])
-            for i in nograntoption:
-                decodenograntopt.append(grantdict[i])
-        # Take grant list from previous step and put elements together in single string
-        allgrants = {'decodegrantopt': ', '.join(decodegrantopt), 'decodenograntopt': ', '.join(decodenograntopt),
-                     'grantee': grantee, 'grantor': grantor}
-        return allgrants
+                a = re.compile(r'[arwdRxtXUCT]\*')
+                grantoption = [x.replace('*', '') for x in a.findall(privs)]
+                nograntoption = list(a.sub('', privs))
+                decodegrantopt.extend(grantdict[i] for i in grantoption)
+                decodenograntopt.extend(grantdict[i] for i in nograntoption)
+        return {
+            'decodegrantopt': ', '.join(decodegrantopt),
+            'decodenograntopt': ', '.join(decodenograntopt),
+            'grantee': grantee,
+            'grantor': grantor,
+        }
 
 
 def deriveddls(privlist, targetuser):

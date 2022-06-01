@@ -68,8 +68,7 @@ class GlobalConfigUnittests(unittest.TestCase):
     def test_global_config_reader_unprocessed_values(self):
         unprocessed_parameters = ['application_name', 'config_file', 'eu-west-1']
         full_args = copy.deepcopy(unprocessed_parameters)
-        for parameter in self.processable_parameters:
-            full_args.append(parameter)
+        full_args.extend(iter(self.processable_parameters))
         config_reader = GlobalConfigParametersReader()
         config_reader.get_config_key_values_updated_with_cli_args(full_args)
         self.assertEqual(unprocessed_parameters, config_reader.unprocessed_arguments)
@@ -77,8 +76,7 @@ class GlobalConfigUnittests(unittest.TestCase):
     def test_global_config_reader_unknown_key_should_raise_parsing_exception(self):
         unprocessed_parameters = ['application_name', 'config_file', 'eu-west-1']
         full_args = copy.deepcopy(unprocessed_parameters)
-        for parameter in self.processable_parameters:
-            full_args.append(parameter)
+        full_args.extend(iter(self.processable_parameters))
         unknown_key = '--unknown-key'
         unprocessed_parameters.append(unknown_key)
         full_args.append(unknown_key)

@@ -48,7 +48,7 @@ def execute_query(conn, query):
         results = cursor.fetchall()
 
         if debug:
-            comment('Query Execution returned %s Results' % (len(results)))
+            comment(f'Query Execution returned {len(results)} Results')
     except pg8000.ProgrammingError as e:
         if "no result set" in str(e):
             return None
@@ -78,7 +78,7 @@ def comment(string):
         if re.match('.*\\n.*', string) is not None:
             print('/* [%s]\n%s\n*/\n' % (str(os.getpid()), string))
         else:
-            print('-- %s [%s] %s' % (datetime_str, str(os.getpid()), string))
+            print(f'-- {datetime_str} [{str(os.getpid())}] {string}')
 
 
 def print_statements(statements):
@@ -93,7 +93,7 @@ def get_pg_conn(db_host, db, db_user, db_pwd, schema_name, db_port=5439, query_g
     conn = None
 
     if debug:
-        comment('Connect %s:%s:%s:%s' % (db_host, db_port, db, db_user))
+        comment(f'Connect {db_host}:{db_port}:{db}:{db_user}')
 
     try:
         conn = pg8000.connect(user=db_user, host=db_host, port=int(db_port), database=db, password=db_pwd,
@@ -101,7 +101,7 @@ def get_pg_conn(db_host, db, db_user, db_pwd, schema_name, db_port=5439, query_g
         conn._usock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         conn.autocommit = True
     except Exception as e:
-        print("Exception on Connect to Cluster: %s" % e)
+        print(f"Exception on Connect to Cluster: {e}")
         print('Unable to connect to Cluster Endpoint')
         cleanup(conn)
 
@@ -111,7 +111,7 @@ def get_pg_conn(db_host, db, db_user, db_pwd, schema_name, db_port=5439, query_g
     aws_utils.set_search_paths(conn, schema_name, exclude_external_schemas=True)
 
     if query_group is not None and query_group != '':
-        set_query_group = 'set query_group to %s' % query_group
+        set_query_group = f'set query_group to {query_group}'
 
         if debug:
             comment(set_query_group)
@@ -120,7 +120,7 @@ def get_pg_conn(db_host, db, db_user, db_pwd, schema_name, db_port=5439, query_g
 
     set_slot_count = None
     if query_slot_count is not None and query_slot_count > 1:
-        set_slot_count = 'set wlm_query_slot_count = %s' % query_slot_count
+        set_slot_count = f'set wlm_query_slot_count = {query_slot_count}'
 
     if set_slot_count is not None:
         if debug:
@@ -143,7 +143,7 @@ def get_pg_conn(db_host, db, db_user, db_pwd, schema_name, db_port=5439, query_g
 
     run_commands(conn, [set_name])
 
-    comment("Connected to %s:%s:%s as %s" % (db_host, db_port, db, db_user))
+    comment(f"Connected to {db_host}:{db_port}:{db} as {db_user}")
 
     return conn
 
@@ -151,7 +151,10 @@ def get_pg_conn(db_host, db, db_user, db_pwd, schema_name, db_port=5439, query_g
 def run_commands(conn, commands, cw=None, cluster_name=None, suppress_errors=False):
     for idx, c in enumerate(commands, start=1):
         if c is not None:
-            comment('[%s] Running %s out of %s commands: %s' % (str(os.getpid()), idx, len(commands), c))
+            comment(
+                f'[{str(os.getpid())}] Running {idx} out of {len(commands)} commands: {c}'
+            )
+
             try:
                 cursor = conn.cursor()
                 cursor.execute(c)
@@ -297,17 +300,26 @@ def run_vacuum(conn,
         comment(get_vacuum_statement)
 
     vacuum_statements = execute_query(conn, get_vacuum_statement)
-    comment("Found %s Tables requiring Vacuum and flagged by alert" % len(vacuum_statements))
+    comment(
+        f"Found {len(vacuum_statements)} Tables requiring Vacuum and flagged by alert"
+    )
+
 
     for vs in vacuum_statements:
-        statements.append(vs[0])
-        statements.append("analyze %s.\"%s\"" % (vs[2], vs[1]))
-
-    if not run_commands(conn, statements, cw=cw, cluster_name=cluster_name, suppress_errors=ignore_errors):
-        if not ignore_errors:
-            if debug:
-                print("Error running statements: %s" % (str(statements),))
-            return ERROR
+        statements.extend((vs[0], "analyze %s.\"%s\"" % (vs[2], vs[1])))
+    if (
+        not run_commands(
+            conn,
+            statements,
+            cw=cw,
+            cluster_name=cluster_name,
+            suppress_errors=ignore_errors,
+        )
+        and not ignore_errors
+    ):
+        if debug:
+            print(f"Error running statements: {statements}")
+        return ERROR
 
     statements = []
     if table_name is None and blacklisted_tables is None:
@@ -346,17 +358,26 @@ def run_vacuum(conn,
             comment(get_vacuum_statement)
 
         vacuum_statements = execute_query(conn, get_vacuum_statement)
-        comment("Found %s Tables requiring Vacuum due to stale statistics" % len(vacuum_statements))
+        comment(
+            f"Found {len(vacuum_statements)} Tables requiring Vacuum due to stale statistics"
+        )
+
 
         for vs in vacuum_statements:
-            statements.append(vs[0])
-            statements.append("analyze %s.\"%s\"" % (vs[2], vs[1]))
-
-        if not run_commands(conn, statements, cw=cw, cluster_name=cluster_name, suppress_errors=ignore_errors):
-            if not ignore_errors:
-                if debug:
-                    print("Error running statements: %s" % (str(statements),))
-                return ERROR
+            statements.extend((vs[0], "analyze %s.\"%s\"" % (vs[2], vs[1])))
+        if (
+            not run_commands(
+                conn,
+                statements,
+                cw=cw,
+                cluster_name=cluster_name,
+                suppress_errors=ignore_errors,
+            )
+            and not ignore_errors
+        ):
+            if debug:
+                print(f"Error running statements: {statements}")
+            return ERROR
 
     statements = []
     if table_name is None and blacklisted_tables is None:
@@ -388,17 +409,26 @@ def run_vacuum(conn,
             comment(get_vacuum_statement)
 
         vacuum_statements = execute_query(conn, get_vacuum_statement)
-        comment("Found %s Tables with Interleaved Sort Keys requiring Vacuum" % len(vacuum_statements))
+        comment(
+            f"Found {len(vacuum_statements)} Tables with Interleaved Sort Keys requiring Vacuum"
+        )
+
 
         for vs in vacuum_statements:
-            statements.append(vs[0])
-            statements.append("analyze %s.\"%s\"" % (vs[2], vs[1]))
-
-        if not run_commands(conn, statements, cw=cw, cluster_name=cluster_name, suppress_errors=ignore_errors):
-            if not ignore_errors:
-                if debug:
-                    print("Error running statements: %s" % (str(statements),))
-                return ERROR
+            statements.extend((vs[0], "analyze %s.\"%s\"" % (vs[2], vs[1])))
+        if (
+            not run_commands(
+                conn,
+                statements,
+                cw=cw,
+                cluster_name=cluster_name,
+                suppress_errors=ignore_errors,
+            )
+            and not ignore_errors
+        ):
+            if debug:
+                print(f"Error running statements: {statements}")
+            return ERROR
 
     return True
 
@@ -413,8 +443,6 @@ def run_analyze(conn,
                 predicate_cols=False,
                 stats_off_pct=10,
                 **kwargs):
-    statements = []
-
     if predicate_cols:
         predicate_cols_option = ' PREDICATE COLUMNS '
     else:
@@ -570,16 +598,22 @@ def run_analyze(conn,
 
     analyze_statements = execute_query(conn, get_analyze_statement_feedback)
 
-    for vs in analyze_statements:
-        statements.append(vs[0])
+    statements = [vs[0] for vs in analyze_statements]
+    comment(f"Found {len(statements)} Tables requiring Analysis")
 
-    comment("Found %s Tables requiring Analysis" % len(statements))
-
-    if not run_commands(conn, statements, cw=cw, cluster_name=cluster_name, suppress_errors=ignore_errors):
-        if not ignore_errors:
-            if debug:
-                print("Error running statements: %s" % (str(statements),))
-            return ERROR
+    if (
+        not run_commands(
+            conn,
+            statements,
+            cw=cw,
+            cluster_name=cluster_name,
+            suppress_errors=ignore_errors,
+        )
+        and not ignore_errors
+    ):
+        if debug:
+            print(f"Error running statements: {statements}")
+        return ERROR
 
     if table_name is None:
         comment("Extracting Candidate Tables for analyze based on stats off from system table info ...")
@@ -612,15 +646,20 @@ def run_analyze(conn,
 
         analyze_statements = execute_query(conn, get_analyze_statement)
 
-        statements = []
-        for vs in analyze_statements:
-            statements.append(vs[0])
-
-        if not run_commands(conn, statements, cw=cw, cluster_name=cluster_name, suppress_errors=ignore_errors):
-            if not ignore_errors:
-                if debug:
-                    print("Error running statements: %s" % (str(statements),))
-                    return ERROR
+        statements = [vs[0] for vs in analyze_statements]
+        if (
+            not run_commands(
+                conn,
+                statements,
+                cw=cw,
+                cluster_name=cluster_name,
+                suppress_errors=ignore_errors,
+            )
+            and not ignore_errors
+            and debug
+        ):
+            print(f"Error running statements: {statements}")
+            return ERROR
     return True
 
 
@@ -642,13 +681,12 @@ def run_analyze_vacuum(**kwargs):
     if config_constants.SUPPRESS_CLOUDWATCH not in kwargs or not kwargs[config_constants.SUPPRESS_CLOUDWATCH]:
         try:
             cw = boto3.client('cloudwatch', region_name=aws_region)
-            comment("Connected to CloudWatch in %s" % aws_region)
+            comment(f"Connected to CloudWatch in {aws_region}")
         except Exception as e:
             if debug:
                 print(traceback.format_exc())
-    else:
-        if debug:
-            comment("Suppressing CloudWatch connection and metrics export")
+    elif debug:
+        comment("Suppressing CloudWatch connection and metrics export")
 
     # extract the cluster name
     if config_constants.CLUSTER_NAME in kwargs:
@@ -660,7 +698,7 @@ def run_analyze_vacuum(**kwargs):
         cluster_name = kwargs[config_constants.DB_HOST].split('.')[0]
 
     if debug:
-        comment("Using Cluster Name %s" % cluster_name)
+        comment(f"Using Cluster Name {cluster_name}")
 
         comment("Supplied Args:")
         print(kwargs)
@@ -710,7 +748,10 @@ def run_analyze_vacuum(**kwargs):
         # Run Analyze based on the  Stats off Metrics table
         run_analyze(master_conn, cluster_name, cw, **kwargs)
     else:
-        comment("Analyze flag arg is set as %s. Analyze is not performed." % analyze_flag)
+        comment(
+            f"Analyze flag arg is set as {analyze_flag}. Analyze is not performed."
+        )
+
 
     comment('Processing Complete')
 

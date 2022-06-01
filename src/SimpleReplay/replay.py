@@ -115,22 +115,10 @@ class Transaction:
         self.transaction_key = transaction_key
 
     def __str__(self):
-        return (
-                "Time interval: %s, Database name: %s, Username: %s, PID: %s, XID: %s, Num queries: %s"
-                % (
-                    self.time_interval,
-                    self.database_name,
-                    self.username,
-                    self.pid,
-                    self.xid,
-                    len(self.queries),
-                )
-        )
+        return f"Time interval: {self.time_interval}, Database name: {self.database_name}, Username: {self.username}, PID: {self.pid}, XID: {self.xid}, Num queries: {len(self.queries)}"
 
     def get_base_filename(self):
-        return (
-                self.database_name + "-" + self.username + "-" + self.pid + "-" + self.xid
-        )
+        return f"{self.database_name}-{self.username}-{self.pid}-{self.xid}"
 
     def start_time(self):
         return self.queries[0].start_time
@@ -154,12 +142,7 @@ class Query:
         self.text = text
 
     def __str__(self):
-        return "Start time: %s, End time: %s, Time interval: %s, Text: %s" % (
-            self.start_time.isoformat(),
-            self.end_time.isoformat(),
-            self.time_interval,
-            self.text.strip(),
-        )
+        return f"Start time: {self.start_time.isoformat()}, End time: {self.end_time.isoformat()}, Time interval: {self.time_interval}, Text: {self.text.strip()}"
 
     def offset_ms(self, ref_time):
         return (self.start_time - ref_time).total_seconds() * 1000.0
@@ -332,7 +315,7 @@ class ConnectionThread(threading.Thread):
         json_tags = {"xid": transaction.xid,
                      "query_idx": idx,
                      "replay_start": g_replay_timestamp.isoformat()}
-        return "/* {} */ {}".format(json.dumps(json_tags), query_text)
+        return f"/* {json.dumps(json_tags)} */ {query_text}"
 
     def execute_transaction(self, transaction, connection):
         errors = []
@@ -341,7 +324,10 @@ class ConnectionThread(threading.Thread):
         transaction_query_idx = 0
         for idx, query in enumerate(transaction.queries):
             time_until_start_ms = query.offset_ms(self.first_event_time) - current_offset_ms(self.replay_start)
-            truncated_query = (query.text[:60] + '...' if len(query.text) > 60 else query.text).replace("\n", " ")
+            truncated_query = (
+                f'{query.text[:60]}...' if len(query.text) > 60 else query.text
+            ).replace("\n", " ")
+
             logger.debug(f"Executing [{truncated_query}] in {time_until_start_ms/1000.0:.1f} sec")
 
             if time_until_start_ms > 10:
@@ -367,7 +353,7 @@ class ConnectionThread(threading.Thread):
                 substatement_txt = ""
                 if len(split_statements) > 1:
                     substatement_txt = f", Multistatement: {s_idx+1}/{len(split_statements)}"
-    
+
                 exec_start = datetime.datetime.now(tz=datetime.timezone.utc)
                 exec_end = None
                 try:
@@ -382,7 +368,7 @@ class ConnectionThread(threading.Thread):
                         status = 'Not '
                     exec_end = datetime.datetime.now(tz=datetime.timezone.utc)
                     exec_sec = (exec_end - exec_start).total_seconds()
-    
+
                     logger.debug(
                         f"{status}Replayed DB={transaction.database_name}, USER={transaction.username}, PID={transaction.pid}, XID:{transaction.xid}, Query: {idx+1}/{len(transaction.queries)}{substatement_txt} ({exec_sec} sec)"
                     )
@@ -400,7 +386,7 @@ class ConnectionThread(threading.Thread):
                 self.thread_stats['query_success'] += 1
             else:
                 self.thread_stats['query_error'] += 1
-    
+
             if query.time_interval > 0.0:
                 logger.debug(f"Waiting {query.time_interval} sec between queries")
                 time.sleep(query.time_interval)
@@ -460,8 +446,7 @@ def validate_and_normalize_filters(object, filters):
         if len(include) == 0:
             raise InvalidFilterException("Include filter must not be empty")
 
-        overlap = set(include).intersection(set(exclude))
-        if len(overlap) > 0:
+        if overlap := set(include).intersection(set(exclude)):
             raise InvalidFilterException(f"Can't include the same values in both include and exclude for filter: "
                                          f"{overlap}")
 
@@ -491,10 +476,7 @@ def matches_filters(object, filters):
 
         # otherwise include = * and there's no exclude, so continue checking
 
-    if included == len(object.supported_filters()):
-        return True
-    else:
-        return False
+    return included == len(object.supported_filters())
 
 
 def current_offset_ms(ref_time):
@@ -517,10 +499,8 @@ def parse_connections(workload_directory, time_interval_between_transactions, ti
         )
         connections_json = json.loads(s3_object["Body"].read())
     else:
-        connections_file = open(workload_directory + "/connections.json", "r")
-        connections_json = json.loads(connections_file.read())
-        connections_file.close()
-
+        with open(f"{workload_directory}/connections.json", "r") as connections_file:
+            connections_json = json.loads(connections_file.read())
     for connection_json in connections_json:
         is_time_interval_between_transactions = {
             "": connection_json["time_interval_between_transactions"],
@@ -616,12 +596,10 @@ def parse_transactions_old(workload_directory):
                     if transaction.start_time() and matches_filters(transaction, g_config['filters']):
                         transactions.append(transaction)
     else:
-        sqls_directory = os.listdir(workload_directory + "/SQLs/")
+        sqls_directory = os.listdir(f"{workload_directory}/SQLs/")
         for sql_filename in sqls_directory:
             if sql_filename.endswith(".sql"):
-                sql_file_text = open(
-                    workload_directory + "/SQLs/" + sql_filename, "r"
-                ).read()
+                sql_file_text = open(f"{workload_directory}/SQLs/{sql_filename}", "r").read()
                 transaction = parse_transaction(sql_filename, sql_file_text)
                 if transaction.start_time() and matches_filters(transaction, g_config['filters']):
                     transactions.append(transaction)
@@ -689,9 +667,8 @@ def parse_transaction_old(sql_filename, sql_file_text):
             pid = line.split(": ")[1].strip()
         elif line.startswith("--Xid"):
             xid = line.split(": ")[1].strip()
-        # remove all other comments
         elif not line.startswith("--"):
-            query_text += " " + line
+            query_text += f" {line}"
 
     # fallback to using the filename to retrieve the query details. This should only happen if
     # replay is run over an old extraction.
@@ -723,7 +700,7 @@ def parse_copy_replacements(workload_directory):
     copy_replacements = {}
     copy_replacements_reader = None
 
-    replacements_path = workload_directory + '/' + g_copy_replacements_filename
+    replacements_path = f'{workload_directory}/{g_copy_replacements_filename}'
 
     if replacements_path.startswith("s3://"):
         workload_s3_location = replacements_path[5:].partition("/")
@@ -780,9 +757,7 @@ def collect_stats(aggregated_stats, stats):
 
 
 def percent(num, den):
-    if den == 0:
-        return 0
-    return float(num) / den * 100.0
+    return 0 if den == 0 else float(num) / den * 100.0
 
 
 def init_stats(stats_dict):
@@ -876,9 +851,12 @@ def replay_worker(process_idx, replay_start_time, first_event_time, queue, worke
                 if connection_semaphore is not None:
                     connection_semaphore.release()
 
-                elapsed = int(time.time() - last_empty_queue_time) if last_empty_queue_time else 0
-                # take into account the initial timeout
-                elapsed += timeout_sec
+                elapsed = (
+                    int(time.time() - last_empty_queue_time)
+                    if last_empty_queue_time
+                    else 0
+                ) + timeout_sec
+
                 empty_queue_timeout_sec = g_config.get("empty_queue_timeout_sec", 120)
                 logger.debug(f"No jobs for {elapsed} seconds (timeout {empty_queue_timeout_sec})")
                 # normally processes exit when they get a False on the queue,
@@ -1039,12 +1017,12 @@ def start_replay(connection_logs, default_interface, odbc_driver, first_event_ti
 
     # and add one termination "job"/signal for each worker so signal them to exit when
     # there is no more work
-    for idx in range(num_workers):
+    for _ in range(num_workers):
         if not put_and_retry(False, queue, non_workers=initial_processes):
             break
 
     active_processes = len(multiprocessing.active_children()) - initial_processes
-    logger.debug("Active processes: {}".format(active_processes))
+    logger.debug(f"Active processes: {active_processes}")
 
     # and wait for the work to get done.
     logger.debug(f"{active_processes} processes running")
@@ -1103,11 +1081,13 @@ def export_errors(connection_errors, transaction_errors, workload_location, repl
     logger.info(f"Saving {len(connection_errors)} connection errors, {len(transaction_errors)} transaction_errors")
 
     connection_error_location = (
-            workload_location + "/" + replay_name + "/connection_errors"
+        f"{workload_location}/{replay_name}/connection_errors"
     )
+
     transaction_error_location = (
-            workload_location + "/" + replay_name + "/transaction_errors"
+        f"{workload_location}/{replay_name}/transaction_errors"
     )
+
     logger.info(f"Exporting connection errors to {connection_error_location}/")
     logger.info(f"Exporting transaction errors to {transaction_error_location}/")
 
@@ -1123,38 +1103,36 @@ def export_errors(connection_errors, transaction_errors, workload_location, repl
     for filename, connection_error_text in connection_errors.items():
         if workload_location.startswith("s3://"):
             if prefix:
-                key_loc = "%s/%s/connection_errors/%s.txt" % (prefix, replay_name, filename)
+                key_loc = f"{prefix}/{replay_name}/connection_errors/{filename}.txt"
             else:
-                key_loc = "%s/connection_errors/%s.txt" % (replay_name, filename)
+                key_loc = f"{replay_name}/connection_errors/{filename}.txt"
             s3_client.put_object(
                 Body=connection_error_text,
                 Bucket=bucket_name,
                 Key=key_loc,
             )
         else:
-            error_file = open(connection_error_location + "/" + filename + ".txt", "w")
-            error_file.write(connection_error_text)
-            error_file.close()
-
+            with open(f"{connection_error_location}/{filename}.txt", "w") as error_file:
+                error_file.write(connection_error_text)
     for filename, transaction_errors in transaction_errors.items():
-        error_file_text = ""
-        for transaction_error in transaction_errors:
-            error_file_text += f"{transaction_error[0]}\n{transaction_error[1]}\n\n"
+        error_file_text = "".join(
+            f"{transaction_error[0]}\n{transaction_error[1]}\n\n"
+            for transaction_error in transaction_errors
+        )
 
         if workload_location.startswith("s3://"):
             if prefix:
-                key_loc = "%s/%s/transaction_errors/%s.txt" % (prefix, replay_name, filename)
+                key_loc = f"{prefix}/{replay_name}/transaction_errors/{filename}.txt"
             else:
-                key_loc = "%s/transaction_errors/%s.txt" % (replay_name, filename)
+                key_loc = f"{replay_name}/transaction_errors/{filename}.txt"
             s3_client.put_object(
                 Body=error_file_text,
                 Bucket=bucket_name,
                 Key=key_loc,
             )
         else:
-            error_file = open(transaction_error_location + "/" + filename + ".txt", "w")
-            error_file.write(error_file_text)
-            error_file.close()
+            with open(f"{transaction_error_location}/{filename}.txt", "w") as error_file:
+                error_file.write(error_file_text)
 
 
 def assign_copy_replacements(connection_logs, replacements):
@@ -1163,8 +1141,9 @@ def assign_copy_replacements(connection_logs, replacements):
             for query in transaction.queries:
                 if "copy " in query.text.lower() and "from 's3:" in query.text.lower():
 
-                    from_text = re.search(r"from 's3:\/\/[^']*", query.text, re.IGNORECASE)
-                    if from_text:
+                    if from_text := re.search(
+                        r"from 's3:\/\/[^']*", query.text, re.IGNORECASE
+                    ):
                         existing_copy_location = from_text.group()[6:]
 
                         try:
@@ -1206,9 +1185,9 @@ def assign_unloads(connection_logs, replay_output, replay_name, unload_iam_role)
             for query in transaction.queries:
 
                 if "unload" in query.text.lower() and "to 's3:" in query.text.lower():
-                    to_text = re.search(r"to 's3:\/\/[^']*", query.text, re.IGNORECASE).group()[9:]
-
-                    if to_text:
+                    if to_text := re.search(
+                        r"to 's3:\/\/[^']*", query.text, re.IGNORECASE
+                    ).group()[9:]:
                         existing_unload_location = re.search(r"to 's3:\/\/[^']*", query.text, re.IGNORECASE).group()[4:]
                         replacement_unload_location = (
                                 replay_output
@@ -1221,7 +1200,7 @@ def assign_unloads(connection_logs, replay_output, replay_name, unload_iam_role)
                         new_query_text = query.text.replace(
                             existing_unload_location, replacement_unload_location
                         )
-                        if not new_query_text == query.text:
+                        if new_query_text != query.text:
                             query.text = new_query_text
                             query.text = re.sub(
                                 r"IAM_ROLE 'arn:aws:iam::\d+:role/\S+'",
@@ -1305,12 +1284,12 @@ def get_connection_credentials(username, database=None, max_attempts=10, skip_ca
     credentials_timeout_sec = 3600
     retry_delay_sec = 10
 
-    # how long to cache credentials per user
-    cache_timeout_sec = 1800
-
     # check the cache
     if not skip_cache and g_credentials_cache.get(username) is not None:
         record = g_credentials_cache.get(username)
+        # how long to cache credentials per user
+        cache_timeout_sec = 1800
+
         if (datetime.datetime.now(tz=datetime.timezone.utc) - record[
             'last_update']).total_seconds() < cache_timeout_sec:
             logger.debug(f'Using {username} credentials from cache')
@@ -1354,29 +1333,20 @@ def get_connection_credentials(username, database=None, max_attempts=10, skip_ca
             logger.error(f"Cluster {cluster_id} not found. Please confirm cluster endpoint, account, and region.")
             exit(-1)
 
-        if response is None or response.get('DbPassword') is None:
-            logger.warning(f"Failed to retrieve credentials for user {username} (attempt {attempt}/{max_attempts})")
-            logger.debug(response)
-            response = None
-            if attempt < max_attempts:
-                time.sleep(retry_delay_sec)
-        else:
+        if response is not None and response.get('DbPassword') is not None:
             break
 
+        logger.warning(f"Failed to retrieve credentials for user {username} (attempt {attempt}/{max_attempts})")
+        logger.debug(response)
+        response = None
+        if attempt < max_attempts:
+            time.sleep(retry_delay_sec)
     if response is None:
         msg = f"Failed to retrieve credentials for {username}"
         raise CredentialsException(msg)
 
-    cluster_odbc_url = (
-        "Driver={}; Server={}; Database={}; IAM=1; DbUser={}; DbPassword={}; Port={}".format(
-            odbc_driver,
-            cluster_host,
-            cluster_database,
-            response["DbUser"].split(":")[1],
-            response["DbPassword"],
-            cluster_port,
-        )
-    )
+    cluster_odbc_url = f'Driver={odbc_driver}; Server={cluster_host}; Database={cluster_database}; IAM=1; DbUser={response["DbUser"].split(":")[1]}; DbPassword={response["DbPassword"]}; Port={cluster_port}'
+
 
     cluster_psql = {
         "username": response["DbUser"],
@@ -1397,7 +1367,7 @@ def get_connection_credentials(username, database=None, max_attempts=10, skip_ca
         'database': cluster_database,
         'odbc_driver': g_config["odbc_driver"]
     }
-    logger.debug("Successfully retrieved database credentials for {}".format(username))
+    logger.debug(f"Successfully retrieved database credentials for {username}")
     g_credentials_cache[username] = {'last_update': datetime.datetime.now(tz=datetime.timezone.utc),
                                      'target_cluster_urls': credentials}
     return credentials

@@ -42,7 +42,7 @@ class RedshiftUnloadCopyClusterTests(TestCase):
     # noinspection PyUnusedLocal
     @staticmethod
     def get_random_identifier(*args, **kwargs):
-        return ''.join([choice(string.ascii_lowercase) for i in range(0, 20)])
+        return ''.join([choice(string.ascii_lowercase) for _ in range(20)])
 
     def test_check_if_dev_database_exists(self):
         cluster = RedshiftClusterFactory.from_cluster(self.cluster)
@@ -55,9 +55,7 @@ class RedshiftUnloadCopyClusterTests(TestCase):
 
     def test_retrieve_tbl_ddl(self):
         table = TableResource(self.cluster, self.test_schema_name, self.test_table_name)
-        ddl_text = None
-        if table.is_present():
-            ddl_text = table.get_create_sql(generate=True)
+        ddl_text = table.get_create_sql(generate=True) if table.is_present() else None
         start = r'CREATE TABLE IF NOT EXISTS ["]*{s}["]*.["]*{t}["]*'.format(s=self.test_schema_name,
                                                                              t=self.test_table_name)
         self.assertRegexpMatches(ddl_text, start, 'Create table is not present')

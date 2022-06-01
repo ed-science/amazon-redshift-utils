@@ -86,7 +86,7 @@ def log_version():
         with open("VERSION", "r") as fp:
             logger.info(f"Version {fp.read().strip()}")
     except:
-        logger.warning(f"Version unknown")
+        logger.warning("Version unknown")
 
 
 def db_connect(interface="psql",
@@ -208,7 +208,7 @@ def bucket_dict(bucket_url):
         exit(-1)
     if path.startswith('/'):
         path = path[1:]
-    if not path == '' and not path.endswith('/'):
+    if path != '' and not path.endswith('/'):
         path = f"{path}/"
     if path == 'replays/':
         path = ''

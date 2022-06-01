@@ -65,7 +65,7 @@ def run_replay_analysis(replay, cluster_endpoint, start_time, end_time, bucket_u
         exit(-1)
 
     # generate replay_id_report.pdf and info.json
-    logger.info(f"Generating report.")
+    logger.info("Generating report.")
     pdf = pdf_gen(report, summary)
     info = create_json(report)
 
@@ -287,7 +287,7 @@ def create_json(report):
     dictionary = report.cluster_details
     dictionary['Replay ID'] = report.replay_id
     json_object = json.dumps(dictionary, indent=4)
-    with open(f"info.json", "w") as outfile:
+    with open("info.json", "w") as outfile:
         outfile.write(json_object)
         return outfile.name
 
@@ -347,8 +347,10 @@ def list_replays(bucket_url):
     try:
         resp = client("s3").list_objects_v2(Bucket=bucket.get('bucket_name'), Delimiter='/', Prefix='analysis/')
         if resp['KeyCount'] == 0:
-            logger.error(f"No replays available in S3. Please run a replay with replay analysis to access replays "
-                         f"from the command line.")
+            logger.error(
+                "No replays available in S3. Please run a replay with replay analysis to access replays "
+            )
+
             exit(-1)
 
     except Exception as e:
@@ -428,14 +430,14 @@ def main():
 
     if not (args.bucket or args.replay_id1 or args.replay_id2):
         print("Find work location")
-    elif args.bucket and not (args.replay_id1 or args.replay_id2):
+    elif args.bucket and not args.replay_id1 and not args.replay_id2:
         list_replays(args.bucket[0])
     elif args.bucket and args.replay_id1 and not args.replay_id2:
         if args.sql:
             list_sql(args.bucket[0], args.replay_id1)
         else:
             analysis_summary(args.bucket[0], args.replay_id1)
-    elif args.bucket and args.replay_id1 and args.replay_id2:
+    elif args.bucket and args.replay_id1:
         if args.replay_id1 == args.replay_id2:
             logger.error("Cannot compare same replay, please choose two distinct replay ids.")
             exit(-1)

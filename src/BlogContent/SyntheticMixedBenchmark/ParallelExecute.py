@@ -24,10 +24,7 @@ sqlWait=sys.argv[12]
 
 print(host)
 
-numQueries = 1
-if sqlWhere == "COPY":
-    numQueries = 3
-    
+numQueries = 3 if sqlWhere == "COPY" else 1
 sqlColumn = ' querytxt  '
 sqlTable = '( with built_list as ( select 1 rnk union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9 union select 10 union select 11 union select 12 union select 13 union select 14 union select 15 union select 16 union select 17 union select 18 union select 19 union select 20) select querytxt , sql_type from public.tpc_h_sqls join built_list b1 on 1=1 join built_list b2 on 1=1  join built_list b3 on 1=1 order by b1.rnk, b2.rnk, b3.rnk, tpch_sql_number ) t'
 
@@ -49,7 +46,7 @@ def execute(statement):
         print('Finished running query')
         conn.close()
     except:
-        logging.error("Query failed: " + statement)
+        logging.error(f"Query failed: {statement}")
 
 rcount = 0
 
@@ -58,20 +55,26 @@ print("the record count is:", rcount)
 if rcount >= 0:
     # Connect to the cluster
     try:
-        print('Connecting to Redshift: %s' % host)
+        print(f'Connecting to Redshift: {host}')
         conn = pg8000.connect(database=database, user=masteruser,password=masterpass, host=host, port=port)
         print('Successfully Connected to Cluster using master user')
 
         # create a new cursor for methods to run through
         cursorTables = conn.cursor()
-        statementTables = "select " + sqlColumn + " from " + sqlTable + " where sql_type = '" + sqlWhere + "'  "
+        statementTables = (
+            f"select {sqlColumn} from {sqlTable}"
+            + " where sql_type = '"
+            + sqlWhere
+            + "'  "
+        )
+
         result = cursorTables.execute(statementTables)
-        print('number of sql stmt: %s' % cursorTables.arraysize)
+        print(f'number of sql stmt: {cursorTables.arraysize}')
 
         while True:
             threads = []
             queries = cursorTables.fetchmany(numQueries)
-            
+
             if not queries:
                 break
 
@@ -87,14 +90,14 @@ if rcount >= 0:
             # wait for all threads to complete
             for thread in threads:
                 thread.join()
-                
+
             print('query statement before sleep start')
             time.sleep(int(sqlWait))
-        
+
         conn.close()
 
     except:
-        reason = 'Redshift Connection Failed: exception %s' % sys.exc_info()[1]
+        reason = f'Redshift Connection Failed: exception {sys.exc_info()[1]}'
         print(reason)
 else:
     print('already running query')

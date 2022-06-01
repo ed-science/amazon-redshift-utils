@@ -24,7 +24,6 @@ def pdf_gen(report, summary=None):
         docs = yaml.safe_load(stream)
 
         style = g_stylesheet.get('styles')
-        elems = []  # elements array used to build pdf structure
         pdf = SimpleDocTemplate(f"{report.replay_id}_report.pdf",
                                 pagesize=letter,
                                 leftMargin=0.75 * inch,
@@ -33,42 +32,74 @@ def pdf_gen(report, summary=None):
                                 bottomMargin=0.75 * inch
                                 )
 
-        # title and subtitle and cluster info table
-        elems.append(Paragraph(docs['title'], style['Title']))
-        elems.append(Paragraph(sub_yaml_vars(report, docs['subtitle']), style['Heading4']))
+        elems = [
+            Paragraph(docs['title'], style['Title']),
+            Paragraph(
+                sub_yaml_vars(report, docs['subtitle']), style['Heading4']
+            ),
+        ]
+
         cluster_info = pd.DataFrame.from_dict(report.cluster_details, orient='index')
         elems.append(Table(df_to_np(report.cluster_details.keys(), cluster_info.transpose()), hAlign='LEFT',
                            style=g_stylesheet.get('table_style')))
         # replay summary
         if summary is not None:
-            elems.append(Paragraph(f"Replay Summary", style['Heading4']))
-            elems.append(ListFlowable([ListItem(Paragraph(x, style['Normal'])) for x in summary], bulletType='bullet'))
-            elems.append(Spacer(0, 5))
+            elems.extend(
+                (
+                    Paragraph("Replay Summary", style['Heading4']),
+                    ListFlowable(
+                        [
+                            ListItem(Paragraph(x, style['Normal']))
+                            for x in summary
+                        ],
+                        bulletType='bullet',
+                    ),
+                    Spacer(0, 5),
+                )
+            )
 
-        elems.append(Paragraph(docs['report_paragraph'], style['Normal']))
-
-        # glossary section
-        elems.append(Paragraph(docs['glossary_header'], style['Heading4']))
-        elems.append(Paragraph(docs['glossary_paragraph'], style['Normal']))
-        elems.append(ListFlowable([ListItem(Paragraph(x, style['Normal'])) for x in docs['glossary']],
-                                  bulletType='bullet'))
-        elems.append(Spacer(0, 5))
-
-        # access data section
-        elems.append(Paragraph(docs['data_header'], style['Heading4']))
-        elems.append(Paragraph(sub_yaml_vars(report, docs['data_paragraph']), style['Normal']))
-        elems.append(ListFlowable([ListItem(Paragraph(x, style['Normal'])) for x in docs['raw_data']],
-                                  bulletType='bullet'))
-        elems.append(Spacer(0, 5))
-        elems.append(Paragraph(sub_yaml_vars(report, docs['agg_data_paragraph']), style['Normal']))
-
-        # notes section
-        elems.append(Paragraph(docs['notes_header'], style['Heading4']))
-        elems.append(Paragraph(docs['notes_paragraph'], style['Normal']))
-        elems.append(ListFlowable([ListItem(Paragraph(x, style['Normal'])) for x in docs['notes']],
-                                  bulletType='bullet'))
-
-        elems.append(PageBreak())   # page 2: cluster details
+        elems.extend(
+            (
+                Paragraph(docs['report_paragraph'], style['Normal']),
+                Paragraph(docs['glossary_header'], style['Heading4']),
+                Paragraph(docs['glossary_paragraph'], style['Normal']),
+                ListFlowable(
+                    [
+                        ListItem(Paragraph(x, style['Normal']))
+                        for x in docs['glossary']
+                    ],
+                    bulletType='bullet',
+                ),
+                Spacer(0, 5),
+                Paragraph(docs['data_header'], style['Heading4']),
+                Paragraph(
+                    sub_yaml_vars(report, docs['data_paragraph']),
+                    style['Normal'],
+                ),
+                ListFlowable(
+                    [
+                        ListItem(Paragraph(x, style['Normal']))
+                        for x in docs['raw_data']
+                    ],
+                    bulletType='bullet',
+                ),
+                Spacer(0, 5),
+                Paragraph(
+                    sub_yaml_vars(report, docs['agg_data_paragraph']),
+                    style['Normal'],
+                ),
+                Paragraph(docs['notes_header'], style['Heading4']),
+                Paragraph(docs['notes_paragraph'], style['Normal']),
+                ListFlowable(
+                    [
+                        ListItem(Paragraph(x, style['Normal']))
+                        for x in docs['notes']
+                    ],
+                    bulletType='bullet',
+                ),
+                PageBreak(),
+            )
+        )
 
         # query breakdown
         build_pdf_tables(elems, docs['query_breakdown'], report)

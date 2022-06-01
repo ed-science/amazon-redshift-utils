@@ -59,7 +59,7 @@ def get_active_ruleset(config):
 # helper to raise config exceptions
 def raise_config_exception(item, message=None):
     if not message:
-        raise Exception("Mandatory item %s not found in configuration" % (item))
+        raise Exception(f"Mandatory item {item} not found in configuration")
     else:
         raise Exception(message)
 
@@ -74,9 +74,10 @@ def check_config(config):
 
     if RULESETS_KEY not in config:
         raise_config_exception(RULESETS_KEY)
-    else:
-        if not (isinstance(config[RULESETS_KEY], list)):
-            raise_config_exception(None, message="%s configuration must be a List" % (RULESETS_KEY))
+    elif not (isinstance(config[RULESETS_KEY], list)):
+        raise_config_exception(
+            None, message=f"{RULESETS_KEY} configuration must be a List"
+        )
 
 
 # download the contents of an S3 file
@@ -84,7 +85,7 @@ def get_file_contents(location, region_name):
     s3_client = boto3.client('s3', region_name=region_name)
 
     bucket = location.replace('s3://', '').split("/")[0]
-    key = location.replace('s3://' + bucket + "/", '')
+    key = location.replace(f's3://{bucket}/', '')
 
     obj = s3_client.get_object(Bucket=bucket, Key=key)
     config_body = obj['Body'].read()

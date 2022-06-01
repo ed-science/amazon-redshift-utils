@@ -27,7 +27,7 @@ def encrypt_password(args):
         if current_region is None or current_region == '':
             raise KeyError
     except KeyError:
-        raise Exception("Unable to resolve environment variable %s" % region_key)
+        raise Exception(f"Unable to resolve environment variable {region_key}")
 
     try:
         encrypt(current_region, args[1], None if len(args) == 2 else args[2])
@@ -46,9 +46,7 @@ def encrypt(aws_region, password, auth_context):
     try:
         cmk_status = kms_connection.describe_key(KeyId=cmk)
     except ClientError as e:
-        if 'NotFoundException' in str(e):
-            pass
-        else:
+        if 'NotFoundException' not in str(e):
             raise e
 
     if cmk_status is None or cmk_status['KeyMetadata'] is None:
@@ -60,7 +58,7 @@ def encrypt(aws_region, password, auth_context):
             sys.exit(ERROR)
         alias = kms_connection.create_alias(AliasName=cmk,
                                             TargetKeyId=new_cmk['KeyMetadata']['KeyId'])
-        print("Created new KMS Key with alias %s" % alias)
+        print(f"Created new KMS Key with alias {alias}")
 
     # encrypt the provided password with this kms key
     # get the application authorisation context
@@ -69,7 +67,7 @@ def encrypt(aws_region, password, auth_context):
         try:
             json_auth_context = json.loads(auth_context)
         except ValueError as e:
-            raise Exception("Error while encoding Auth Context to JSON: %s" % e)
+            raise Exception(f"Error while encoding Auth Context to JSON: {e}")
 
     if json_auth_context is not None:
         encrypted = kms_connection.encrypt(KeyId=cmk,
@@ -79,8 +77,8 @@ def encrypt(aws_region, password, auth_context):
         encrypted = kms_connection.encrypt(KeyId=cmk,
                                            Plaintext=password)
 
-    print("Encryption Complete in %s" % region_key)
-    print("Encrypted Password: %s" % base64.b64encode(encrypted['CiphertextBlob']))
+    print(f"Encryption Complete in {region_key}")
+    print(f"Encrypted Password: {base64.b64encode(encrypted['CiphertextBlob'])}")
 
 
 if __name__ == "__main__":

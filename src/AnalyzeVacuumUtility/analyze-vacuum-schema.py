@@ -97,11 +97,7 @@ parser.add_argument("--suppress-cloudwatch", dest="suppress_cw",
                     help="Don't emit CloudWatch metrics for analyze or vacuum when set to True")
 parser.add_argument("--db", dest="db", help="The Database to Use")
 full_args = parser.parse_args()
-parse_args = {}
-# remove args that end up as None
-for k, v in vars(full_args).items():
-    if v is not None:
-        parse_args[k] = v
+parse_args = {k: v for k, v in vars(full_args).items() if v is not None}
 
 
 def main(argv):
@@ -113,7 +109,7 @@ def main(argv):
             config_constants.DB_PORT: os.environ.get('PGPORT', 5439)}
 
     # add argparse args
-    args.update(parse_args)
+    args |= parse_args
 
     if args.get(config_constants.OUTPUT_FILE) is not None:
         sys.stdout = open(args.get(config_constants.OUTPUT_FILE), 'w')

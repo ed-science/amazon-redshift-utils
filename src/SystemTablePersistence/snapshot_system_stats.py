@@ -32,13 +32,11 @@ pg8000.paramstyle = "qmark"
 
 def run_command(cursor, statement):
     if debug:
-        print("Running Statement: %s" % statement)
+        print(f"Running Statement: {statement}")
 
     t = datetime.datetime.now()
     cursor.execute(statement)
-    interval = (datetime.datetime.now() - t).microseconds / 1000
-
-    return interval
+    return (datetime.datetime.now() - t).microseconds / 1000
 
 
 # nasty hack for backward compatibility, to extract label values from os.environ or event
@@ -47,7 +45,7 @@ def get_config_value(labels, configs):
         for c in configs:
             if l in c:
                 if debug:
-                    print("Resolved label value %s from config" % l)
+                    print(f"Resolved label value {l} from config")
 
                 return c[l]
 
@@ -55,7 +53,7 @@ def get_config_value(labels, configs):
 
 
 def create_schema_objects(cursor, conn):
-    with open(os.path.dirname(__file__) + '/lib/history_table_creation.sql', 'r') as sql_file:
+    with open(f'{os.path.dirname(__file__)}/lib/history_table_creation.sql', 'r') as sql_file:
         table_creation = sql_file.read()
 
     for s in table_creation.split(";"):
@@ -66,9 +64,7 @@ def create_schema_objects(cursor, conn):
             try:
                 cursor.execute(stmt)
             except Exception as e:
-                if re.search(".*column.*already exists", str(e)) is not None:
-                    pass
-                else:
+                if re.search(".*column.*already exists", str(e)) is None:
                     print(e)
                     raise e
 
@@ -86,22 +82,22 @@ def snapshot_system_tables(cursor, conn, table_config):
 
         # extract and format the column list from the select statement if it has one
         if re.search("select.*\*", snapshot_new.lower()) is not None:
-            stmt = 'insert into history.%s (%s);' % (table, snapshot_new)
+            stmt = f'insert into history.{table} ({snapshot_new});'
         else:
             columns = snapshot_new.lower().split("from")[0].split("select")[1].strip()
             column_list = []
             for c in columns.split(','):
                 column_list.append(c.strip())
-            stmt = 'insert into history.%s(%s)(%s);' % (table, ','.join(column_list), snapshot_new)
+            stmt = f"insert into history.{table}({','.join(column_list)})({snapshot_new});"
 
         if debug:
-            print("%s: %s" % (table, stmt))
+            print(f"{table}: {stmt}")
         cursor.execute(stmt)
         c = cursor.rowcount
         rowcounts[table] = c
 
         if debug:
-            print("%s: %s Rows Created" % (table, c))
+            print(f"{table}: {c} Rows Created")
 
     conn.commit()
 
@@ -112,7 +108,7 @@ def cleanup_snapshots(cursor, conn, cleanup_after_days, table_config):
     delete_after = (datetime.datetime.now() + timedelta(days=-cleanup_after_days)).strftime('%Y-%m-%d %H:%M:%S')
 
     if debug:
-        print("Deleting history table data older than %s" % delete_after)
+        print(f"Deleting history table data older than {delete_after}")
 
     rowcounts = {}
     for s in table_config:
@@ -132,7 +128,7 @@ def cleanup_snapshots(cursor, conn, cleanup_after_days, table_config):
         rowcounts[table] = c
 
         if debug:
-            print("%s: %s Rows Deleted" % (table, c))
+            print(f"{table}: {c} Rows Deleted")
 
     conn.commit()
 
@@ -143,7 +139,8 @@ def unload_stats(cursor, table_config, cluster, s3_export_location, redshift_unl
     for s in table_config:
         table = s['table']
         unload_select = s['snapshotNew']
-        export_location = '%s/%s/cluster=%s/datetime=%s/' % (s3_export_location, table, cluster, datetime.datetime.now())
+        export_location = f'{s3_export_location}/{table}/cluster={cluster}/datetime={datetime.datetime.now()}/'
+
         statement = "unload ('%s') to '%s' IAM_ROLE '%s' gzip delimiter '|' addquotes escape allowoverwrite;" % (
             unload_select.replace("'","\\'"), export_location, redshift_unload_iam_role_arn)
 
@@ -152,7 +149,7 @@ def unload_stats(cursor, table_config, cluster, s3_export_location, redshift_unl
 
         cursor.execute(statement)
 
-        print("Unloaded table stats for %s to %s" % (table, export_location))
+        print(f"Unloaded table stats for {table} to {export_location}")
 
 
 def snapshot(config_sources):
@@ -166,7 +163,7 @@ def snapshot(config_sources):
     kms = boto3.client('kms', region_name=aws_region)
 
     if debug:
-        print("Connected to AWS KMS & CloudWatch in %s" % aws_region)
+        print(f"Connected to AWS KMS & CloudWatch in {aws_region}")
 
     user = get_config_value(['DbUser', 'db_user', 'dbUser'], config_sources)
     host = get_config_value(['HostName', 'cluster_endpoint', 'dbHost', 'db_host'], config_sources)
@@ -184,8 +181,7 @@ def snapshot(config_sources):
 
     # override the password with the contents of .pgpass or environment variables
     try:
-        pg_pwd = pgpasslib.getpass(host, port, database, user)
-        if pg_pwd:
+        if pg_pwd := pgpasslib.getpass(host, port, database, user):
             pwd = pg_pwd
     except pgpasslib.FileNotFound as e:
         pass
@@ -207,20 +203,20 @@ def snapshot(config_sources):
                 pwd = kms.decrypt(CiphertextBlob=base64.b64decode(enc_password), EncryptionContext=auth_context)[
                     'Plaintext']
         except:
-            print('KMS access failed: exception %s' % sys.exc_info()[1])
-            print('Encrypted Password: %s' % enc_password)
-            print('Encryption Context %s' % auth_context)
+            print(f'KMS access failed: exception {sys.exc_info()[1]}')
+            print(f'Encrypted Password: {enc_password}')
+            print(f'Encryption Context {auth_context}')
             raise
 
     # Connect to the cluster
     try:
         if debug:
-            print('Connecting to Redshift: %s' % host)
+            print(f'Connecting to Redshift: {host}')
 
         conn = pg8000.connect(database=database, user=user, password=pwd, host=host, port=port, ssl=ssl)
         conn.autocommit = True
     except:
-        print('Redshift Connection Failed: exception %s' % sys.exc_info()[1])
+        print(f'Redshift Connection Failed: exception {sys.exc_info()[1]}')
         raise
 
     if debug:
@@ -238,7 +234,10 @@ def snapshot(config_sources):
     cursor.execute(set_name)
 
     # load the table configuration
-    table_config = json.load(open(os.path.dirname(__file__) + '/lib/history_table_config.json', 'r'))
+    table_config = json.load(
+        open(f'{os.path.dirname(__file__)}/lib/history_table_config.json', 'r')
+    )
+
 
     # create the dependent objects if we need to
     create_schema_objects(cursor, conn)

@@ -223,13 +223,19 @@ class RedshiftCluster:
         except pg.InternalError as ie:
             if hasattr(ie, 'args') and len(ie.args) > 0 \
                     and ('Operation timed out' in ie.args[0] or 'timeout expired' in ie.args[0]):
-                msg = 'Connection timeout when connecting to {h}:{p}.\n'
-                msg += 'Make sure that firewalls and security groups allow connections.'
+                msg = (
+                    'Connection timeout when connecting to {h}:{p}.\n'
+                    + 'Make sure that firewalls and security groups allow connections.'
+                )
+
                 logging.fatal(msg.format(h=self.get_host(), p=self.get_port()))
             else:
                 logging.fatal('Internal error encountered when trying to connect: {ie}'.format(ie=ie))
             raise sys.exc_info()[0](sys.exc_info()[1]).with_traceback(sys.exc_info()[2])
-        if self._configured_timeout is not None and not self._configured_timeout == timeout:
+        if (
+            self._configured_timeout is not None
+            and self._configured_timeout != timeout
+        ):
             rs_conn.query(timeout)
             self.database_timeouts[database][opt] = timeout
         return rs_conn
@@ -238,7 +244,10 @@ class RedshiftCluster:
         database = database or self.get_db()
         if database in self.database_connections:
             if opt in self.database_connections[database]:
-                if not (opt in self.database_timeouts[database] and self.database_timeouts[database][opt] == timeout):
+                if (
+                    opt not in self.database_timeouts[database]
+                    or self.database_timeouts[database][opt] != timeout
+                ):
                     logging.debug('Timeout is different from last configured timeout.')
                     self.database_connections[database][opt].query(timeout)
                 return self.database_connections[database][opt]
@@ -250,7 +259,7 @@ class RedshiftCluster:
 
     def execute_update(self, command, opt=options, timeout=set_timeout_stmt, database=None):
         conn_rs = self.get_conn_to_rs(opt=opt, timeout=timeout, database=database)
-        logging.debug('Executing update:' + GET_SAFE_LOG_STRING(command))
+        logging.debug(f'Executing update:{GET_SAFE_LOG_STRING(command)}')
         conn_rs.query(command)
 
     def get_query_full_result_as_list_of_dict(self, sql, opt=options, timeout=set_timeout_stmt, database=None):
@@ -259,10 +268,9 @@ class RedshiftCluster:
         :return:
         """
         conn_rs = self.get_conn_to_rs(opt=opt, timeout=timeout, database=database)
-        logging.debug('Executing query:' + GET_SAFE_LOG_STRING(sql))
+        logging.debug(f'Executing query:{GET_SAFE_LOG_STRING(sql)}')
         result = conn_rs.query(sql)
-        dict_result = result.dictresult()
-        return dict_result
+        return result.dictresult()
 
     def __del__(self):
         for database in self.database_connections:
