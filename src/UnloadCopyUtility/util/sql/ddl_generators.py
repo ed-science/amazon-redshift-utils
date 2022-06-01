@@ -22,7 +22,7 @@ class DDLHelper:
 
     def get_sql(self):
         sql_to_get_all_ddl = SQLTextHelper.remove_trailing_semicolon(self.view_query_sql)
-        return 'SELECT * FROM (' + sql_to_get_all_ddl + ') ' + self.filter_sql + ';'
+        return f'SELECT * FROM ({sql_to_get_all_ddl}) {self.filter_sql};'
 
     def add_filters(self, filters):
         filter_list = []
@@ -31,11 +31,7 @@ class DDLHelper:
                 filter_list.append("{key}={value}".format(key=filter_name, value=filters[filter_name]))
             else:
                 filter_list.append("{key}='{value}'".format(key=filter_name, value=filters[filter_name]))
-        if len(filter_list) > 0:
-            self.filter_sql = ' WHERE '
-            self.filter_sql += ' AND '.join(filter_list)
-        else:
-            self.filter_sql = ''
+        self.filter_sql = ' WHERE ' + ' AND '.join(filter_list) if filter_list else ''
 
 
 class DatabaseDDLHelper(DDLHelper):
@@ -115,17 +111,19 @@ class DDLTransformer:
     def get_relation_regex_string(self, quoted_schema=True, quoted_table=True):
         regex_string = r''
         if self.has_schema_in_ddl():
-            if not quoted_schema:
-                regex_schema = r'(?P<schema_name>.*)'
-            else:
-                regex_schema = r'(?P<schema_name>".*")'
+            regex_schema = (
+                r'(?P<schema_name>".*")'
+                if quoted_schema
+                else r'(?P<schema_name>.*)'
+            )
+
             regex_string += regex_schema
 
         if self.has_table_in_ddl():
-            if not quoted_table:
-                regex_table = r'(?P<table_name>.*)'
-            else:
-                regex_table = r'(?P<table_name>".*")'
+            regex_table = (
+                r'(?P<table_name>".*")' if quoted_table else r'(?P<table_name>.*)'
+            )
+
             regex_string += r'\.' + regex_table
         return regex_string
 
@@ -181,8 +179,7 @@ class DDLTransformer:
 
             space_separated_parts[-1] = relation_specification
             round_bracket_separated_parts[0] = ' '.join(space_separated_parts)
-            new_ddl = '('.join(round_bracket_separated_parts)
-            return new_ddl
+            return '('.join(round_bracket_separated_parts)
         except:
             logging.debug('Clean ddl: {ddl}\nRelation name: {rel_name}'.format(
                 ddl=ddl,

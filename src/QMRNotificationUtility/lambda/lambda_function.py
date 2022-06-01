@@ -47,18 +47,18 @@ try:
     kms = boto3.client('kms')
     password = kms.decrypt(CiphertextBlob=base64.b64decode(enc_password))['Plaintext']
 except:
-    print('KMS access failed: Exception %s' % sys.exc_info()[1])
+    print(f'KMS access failed: Exception {sys.exc_info()[1]}')
 
 try:
     sns = boto3.resource('sns')
     platform_endpoint = sns.PlatformEndpoint('{sns_arn}'.format(sns_arn = sns_arn))
 except:
-    print('SNS access failed: Exception %s' % sys.exc_info()[1])
+    print(f'SNS access failed: Exception {sys.exc_info()[1]}')
 
 
 def run_command(cursor, statement):
     if debug:
-        print("Running Statement: %s" % statement)
+        print(f"Running Statement: {statement}")
 
     return cursor.execute(statement)
 def publish_to_sns(message):
@@ -66,23 +66,24 @@ def publish_to_sns(message):
         if debug:
             print('Publishing messages to SNS topic')
 
-        # Publish a message.
-        response = platform_endpoint.publish(
-                  Subject='Redshift Query Monitoring Rule Notifications',
-                  Message=message,
-                  MessageStructure='string',
-                  MessageAttributes={
-                       'RedshiftQueryMonitoringRuleNotifications': {
-                              'StringValue': 'Redshift Query Monitoring Rule Notifications',
-                              'DataType': 'String'
-                       }
-                  }
+        return platform_endpoint.publish(
+            Subject='Redshift Query Monitoring Rule Notifications',
+            Message=message,
+            MessageStructure='string',
+            MessageAttributes={
+                'RedshiftQueryMonitoringRuleNotifications': {
+                    'StringValue': 'Redshift Query Monitoring Rule Notifications',
+                    'DataType': 'String',
+                }
+            },
+        )
 
-            )
-        return  response
 
     except:
-        print(' Failed to publish messages to SNS topic: exception %s' % sys.exc_info()[1])
+        print(
+            f' Failed to publish messages to SNS topic: exception {sys.exc_info()[1]}'
+        )
+
         return 'Failed'
 
 
@@ -113,7 +114,7 @@ def query_redshift(conn):
             objects_list.append(d)
 
         #Publish to SNS if any rows fetched
-        if len(objects_list) == 0:
+        if not objects_list:
             print('No rows to publish to SNS')
         else:
             query_result_json = json.dumps(objects_list)
@@ -125,14 +126,14 @@ def query_redshift(conn):
         print('Completed Succesfully ')
 
     except:
-        print('Query Failed: exception %s' % sys.exc_info()[1])
+        print(f'Query Failed: exception {sys.exc_info()[1]}')
         return 'Failed'
 
 def lambda_handler(event, context):
 
     try:
         if debug:
-            print('Connect to Redshift: %s' % host)
+            print(f'Connect to Redshift: {host}')
         conn = redshift_connector.connect(
                 host=host,
                 database=database,
@@ -141,7 +142,7 @@ def lambda_handler(event, context):
                 port=port
                 )
     except:
-        print('Redshift Connection Failed: exception %s' % sys.exc_info()[1])
+        print(f'Redshift Connection Failed: exception {sys.exc_info()[1]}')
         return 'Failed'
 
     if debug:

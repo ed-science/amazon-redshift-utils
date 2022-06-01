@@ -24,7 +24,7 @@ class TestRedshiftUnloadCopy(TestCase):
     s3_path_prefix = 'tests'
 
     def get_s3_key_for_object_name(self, object_name):
-        return self.s3_path_prefix + '/' + object_name
+        return f'{self.s3_path_prefix}/{object_name}'
 
     def setUp(self):
         redshift_unload_copy.conn_to_rs = MagicMock(return_value=MagicMock())
@@ -68,12 +68,18 @@ class TestRedshiftUnloadCopy(TestCase):
         def unload_data(self, s3_details):
             s3_parts = util.s3_utils.S3Helper.tokenize_s3_path(s3_details.dataStagingPath)
             s3_client = boto3.client('s3', 'eu-west-1')
-            s3_client.put_object(Body='content1'.encode('utf-8'),
-                                 Bucket=s3_parts[0],
-                                 Key=s3_parts[1] + 'test_file_1')
-            s3_client.put_object(Body='content2'.encode('utf-8'),
-                                 Bucket=s3_parts[0],
-                                 Key=s3_parts[1] + 'test_file_2')
+            s3_client.put_object(
+                Body='content1'.encode('utf-8'),
+                Bucket=s3_parts[0],
+                Key=f'{s3_parts[1]}test_file_1',
+            )
+
+            s3_client.put_object(
+                Body='content2'.encode('utf-8'),
+                Bucket=s3_parts[0],
+                Key=f'{s3_parts[1]}test_file_2',
+            )
+
             self.dataStagingPath = s3_details.dataStagingPath
 
         def copy_data(self, s3_details):

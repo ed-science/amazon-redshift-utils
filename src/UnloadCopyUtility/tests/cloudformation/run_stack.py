@@ -27,11 +27,10 @@ class CloudFormationStack:
     def get_name(self, stack_name=None):
         if hasattr(self, 'stack_name') and self.stack_name is not None:
             return self.stack_name
-        else:
-            stack_name_parts = ['unload-copy']
-            if stack_name is not None:
-                stack_name_parts.append(stack_name)
-            return '-'.join(stack_name_parts)
+        stack_name_parts = ['unload-copy']
+        if stack_name is not None:
+            stack_name_parts.append(stack_name)
+        return '-'.join(stack_name_parts)
 
     def get_stack_details_expiry_time(self):
         return self.stack_details_update_date + datetime.timedelta(seconds=CloudFormationStack.POLL_INTERVAL)
@@ -52,12 +51,10 @@ class CloudFormationStack:
                 logging.error('Failed to describe stack {sn}: {e}'.format(sn=stack_name, e=str(e)))
                 self._refresh_stack_details()
                 return
-            # noinspection PyUnboundLocalVariable
             if len(response['Stacks']) > 1:
                 raise CloudFormationStack.MultipleStacksException()
-            else:
-                logging.debug('Stack has status')
-                self.stack_details = deepcopy(response['Stacks'][0])
+            logging.debug('Stack has status')
+            self.stack_details = deepcopy(response['Stacks'][0])
             self.stack_details_update_date = datetime.datetime.now()
 
     def get_status(self):
@@ -66,10 +63,14 @@ class CloudFormationStack:
 
     def get_output_variable(self, output_variable_name):
         self._refresh_stack_details()
-        for element in self.stack_details['Outputs']:
-            if element['OutputKey'] == output_variable_name:
-                return element['OutputValue']
-        return None
+        return next(
+            (
+                element['OutputValue']
+                for element in self.stack_details['Outputs']
+                if element['OutputKey'] == output_variable_name
+            ),
+            None,
+        )
 
     def create_stack(self):
         cloudformation.create_stack(StackName=self.get_name(),
@@ -94,7 +95,10 @@ class CloudFormationStack:
                                                  'ParameterValue': value})
 
         # noinspection PyUnusedLocal
-        random_suffix = ''.join(random.choice(string.ascii_uppercase + string.digits) for i in range(8))
+        random_suffix = ''.join(
+            random.choice(string.ascii_uppercase + string.digits) for _ in range(8)
+        )
+
         stack_parameters.append({'ParameterKey': 'MasterUserPassword',
                                  'ParameterValue': 'Pass1.{r}'.format(r=random_suffix)})
         return stack_parameters
@@ -145,7 +149,7 @@ class StackRunner:
         logging.info('Tests have completed')
 
         if self.config['auto_delete']:
-            if self.stack.get_status() == 'NON-EXISTENT' or self.stack.get_status() == 'DELETE_IN_PROGRESS':
+            if self.stack.get_status() in ['NON-EXISTENT', 'DELETE_IN_PROGRESS']:
                 logging.info('Stack {sn} does not exist or being deleted, no action needed.'.format(
                     sn=self.stack.get_name()
                 ))
@@ -171,7 +175,7 @@ class StackRunner:
             stdin, stdout, stderr = client.exec_command('tail ${HOME}/STATUS')
 
             result_text = stdout.read().decode('utf-8')
-            logging.debug('Status ended with:' + str(result_text))
+            logging.debug(f'Status ended with:{str(result_text)}')
         finally:
             client.close()
         if 'STATUS=Complete' in result_text:
@@ -190,18 +194,18 @@ class StackRunner:
                     logging.warning('Encountered unknown argument {arg}'.format(arg=argument))
                     self.print_supported_arguments()
                     sys.exit(88)
-            else:
-                if key_name is not None:
-                    self.config[key_name] = argument
-                    key_name = None
+            elif key_name is None:
+                if self.config['stack_name'] is not None:
+                    raise Exception('Encountered {arg} but stack_name set already to {sn}'.format(
+                        arg=argument,
+                        sn=self.config['stack_name']
+                    ))
                 else:
-                    if self.config['stack_name'] is not None:
-                        raise Exception('Encountered {arg} but stack_name set already to {sn}'.format(
-                            arg=argument,
-                            sn=self.config['stack_name']
-                        ))
-                    else:
-                        self.config['stack_name'] = argument
+                    self.config['stack_name'] = argument
+
+            else:
+                self.config[key_name] = argument
+                key_name = None
 
     def is_boolean_config(self, cli_argument):
         cli_argument = StackRunner.cli_argument_to_config_name(cli_argument)
@@ -218,10 +222,9 @@ class StackRunner:
         return cli_argument.replace('-', '_')
 
     def set_boolean_config(self, cli_argument):
-        if cli_argument.startswith('--no-'):
-            self.config[StackRunner.cli_argument_to_config_name(cli_argument)] = False
-        else:
-            self.config[StackRunner.cli_argument_to_config_name(cli_argument)] = True
+        self.config[
+            StackRunner.cli_argument_to_config_name(cli_argument)
+        ] = not cli_argument.startswith('--no-')
 
     def print_supported_arguments(self):
         for key in self.config.keys():

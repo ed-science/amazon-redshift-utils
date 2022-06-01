@@ -21,7 +21,7 @@ class KMSHelper:
         if (sys.version_info[0] == 3 and sys.version_info[1] >= 6) or sys.version_info[0] > 3:
             # Use new secrets module https://docs.python.org/3/library/secrets.html
             import secrets
-            return secrets.token_bytes(int(256 / 8))
+            return secrets.token_bytes(256 // 8)
         else:
             # Legacy code to generate random value
             try:

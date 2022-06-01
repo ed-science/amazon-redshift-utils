@@ -20,18 +20,19 @@ class StackParametersBuilder:
         return self.redshift_client
 
     def get_parameters_from_stack_details(self):
-        if not self.parameters_fetched_from_stack_details:
-            stack_details_path = '{resource_dir}/STACK_DETAILS.json'.format(resource_dir=self.resource_dir)
-            with open(stack_details_path, 'r') as stack_details_json:
-                stack_details = json.load(stack_details_json)
-                outputs = stack_details['Stacks'][0]['Outputs']
-                for output in outputs:
-                    output_key = output['OutputKey']
-                    output_value = output['OutputValue']
-                    self.parameters[output_key] = output_value
+        if self.parameters_fetched_from_stack_details:
+            return
+        stack_details_path = '{resource_dir}/STACK_DETAILS.json'.format(resource_dir=self.resource_dir)
+        with open(stack_details_path, 'r') as stack_details_json:
+            stack_details = json.load(stack_details_json)
+            outputs = stack_details['Stacks'][0]['Outputs']
+            for output in outputs:
+                output_key = output['OutputKey']
+                output_value = output['OutputValue']
+                self.parameters[output_key] = output_value
 
-                self.parameters['Region'] = stack_details['Stacks'][0]['StackId'].split(':')[3]
-            self.parameters_fetched_from_stack_details = True
+            self.parameters['Region'] = stack_details['Stacks'][0]['StackId'].split(':')[3]
+        self.parameters_fetched_from_stack_details = True
 
     def get_kms_encrypted_password_from_password_kms_txt(self):
         if not self.kms_encrypted_password_fetched_from_password_kms_txt:
@@ -50,20 +51,21 @@ class StackParametersBuilder:
             self.are_s3_parameters_enriched = True
 
     def enrich_cluster_parameters(self):
-        if not self.are_cluster_parameters_enriched:
-            for cluster in ['SourceCluster', 'TargetCluster']:
-                cluster_name = self.parameters[cluster+'Name']
-                cluster_describe_response = self.get_redshift_client().describe_clusters(ClusterIdentifier=cluster_name)
-                if 'Clusters' not in cluster_describe_response or len(cluster_describe_response['Clusters']) != 1:
-                    raise Exception('Could not get details for {type} cluster'.format(type=cluster))
-                for parameter in ['DBName', 'MasterUsername', 'Endpoint.Address', 'Endpoint.Port']:
-                    parameter_parts = parameter.split('.')
-                    parameter_value = cluster_describe_response['Clusters'][0]
-                    for parameter_part in parameter_parts:
-                        parameter_value = parameter_value.get(parameter_part)
-                    parameter_parts.insert(0, cluster)
-                    self.parameters[''.join(parameter_parts)] = str(parameter_value)
-            self.are_cluster_parameters_enriched = True
+        if self.are_cluster_parameters_enriched:
+            return
+        for cluster in ['SourceCluster', 'TargetCluster']:
+            cluster_name = self.parameters[f'{cluster}Name']
+            cluster_describe_response = self.get_redshift_client().describe_clusters(ClusterIdentifier=cluster_name)
+            if 'Clusters' not in cluster_describe_response or len(cluster_describe_response['Clusters']) != 1:
+                raise Exception('Could not get details for {type} cluster'.format(type=cluster))
+            for parameter in ['DBName', 'MasterUsername', 'Endpoint.Address', 'Endpoint.Port']:
+                parameter_parts = parameter.split('.')
+                parameter_value = cluster_describe_response['Clusters'][0]
+                for parameter_part in parameter_parts:
+                    parameter_value = parameter_value.get(parameter_part)
+                parameter_parts.insert(0, cluster)
+                self.parameters[''.join(parameter_parts)] = str(parameter_value)
+        self.are_cluster_parameters_enriched = True
 
     def get_parameters_dict(self):
         self.get_parameters_from_stack_details()

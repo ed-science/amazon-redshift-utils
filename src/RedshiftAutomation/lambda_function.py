@@ -30,16 +30,13 @@ debug = False if config_constants.DEBUG not in os.environ else os.environ[config
 
 
 def safe_get(value, obj):
-    if value in obj:
-        return obj[value]
-    else:
-        return None
+    return obj[value] if value in obj else None
 
 
 def event_handler(event, context):
     current_region = 'us-east-1'
     if region_key not in os.environ:
-        print("Warning - using default region %s" % current_region)
+        print(f"Warning - using default region {current_region}")
     else:
         current_region = os.environ[region_key]
 
@@ -113,17 +110,17 @@ def event_handler(event, context):
     results = []
     for util in run_utilities:
         if util == config_constants.COLUMN_ENCODING:
-            print("Running %s" % util)
+            print(f"Running {util}")
             analyze_schema_compression.configure(**config)
             encoding_result = analyze_schema_compression.run()
             results.append(encoding_result)
         elif util == config_constants.ANALYZE_VACUUM:
-            print("Running %s" % util)
+            print(f"Running {util}")
             analyze_result = analyze_vacuum.run_analyze_vacuum(**config)
             if analyze_result == 0:
                 results.append("OK")
         elif util == config_constants.ANALYZE:
-            print("Running %s" % util)
+            print(f"Running {util}")
             # turn on correct flag
             config[config_constants.DO_ANALYZE] = True
             config[config_constants.DO_VACUUM] = False
@@ -132,7 +129,7 @@ def event_handler(event, context):
             if analyze_result == 0:
                 results.append("OK")
         elif util == config_constants.VACUUM:
-            print("Running %s" % util)
+            print(f"Running {util}")
             # turn on correct flag
             config[config_constants.DO_ANALYZE] = False
             config[config_constants.DO_VACUUM] = True
@@ -141,13 +138,13 @@ def event_handler(event, context):
             if analyze_result == 0:
                 results.append("OK")
         elif util == config_constants.MONITORING:
-            print("Running %s" % util)
+            print(f"Running {util}")
             redshift_monitoring.monitor_cluster([config, os.environ])
         elif util == config_constants.TABLE_PERSISTENCE:
-            print("Running %s" % util)
+            print(f"Running {util}")
             snapshot_system_stats.snapshot([config, os.environ])
         elif util == config_constants.WLM_SCHEDULER:
-            print("Running %s" % util)
+            print(f"Running {util}")
             wlm_scheduler.run_scheduler(config)
 
     print("Processing Complete")

@@ -127,9 +127,8 @@ def close_conn(conn):
     try:
         conn.close()
     except Exception as e:
-        if debug:
-            if 'connection is closed' not in str(e):
-                print(e)
+        if debug and 'connection is closed' not in str(e):
+            print(e)
 
 
 def cleanup(conn):
@@ -147,7 +146,7 @@ def comment(string):
         if re.match('.*\\n.*', string) is not None:
             print('/* [%s]\n%s\n*/\n' % (str(os.getpid()), string))
         else:
-            print('-- [%s] %s' % (str(os.getpid()), string))
+            print(f'-- [{str(os.getpid())}] {string}')
 
 
 def print_statements(statements):
@@ -172,7 +171,7 @@ def get_pg_conn():
     if conn is None:
         # connect to the database
         if debug:
-            comment('Connect [%s] %s:%s:%s:%s' % (pid, db_host, db_port, db, db_user))
+            comment(f'Connect [{pid}] {db_host}:{db_port}:{db}:{db_user}')
 
         try:
             conn = pg8000.connect(user=db_user, host=db_host, port=db_port, database=db, password=db_pwd,
@@ -191,7 +190,7 @@ def get_pg_conn():
         aws_utils.set_search_paths(conn, schema_name, target_schema, exclude_external_schemas=True)
 
         if query_group is not None:
-            set_query_group = 'set query_group to %s' % query_group
+            set_query_group = f'set query_group to {query_group}'
 
             if debug:
                 comment(set_query_group)
@@ -199,7 +198,7 @@ def get_pg_conn():
             run_commands(conn, [set_query_group])
 
         if query_slot_count is not None and query_slot_count != 1:
-            set_slot_count = 'set wlm_query_slot_count = %s' % query_slot_count
+            set_slot_count = f'set wlm_query_slot_count = {query_slot_count}'
 
             if debug:
                 comment(set_slot_count)
@@ -231,12 +230,7 @@ def get_pg_conn():
 
 
 def get_identity(adsrc):
-    # checks if a column defined by adsrc (column from pg_attrdef) is
-    # an identity, since both identities and defaults end up in this table
-    # if is identity returns (seed, step); if not returns None
-    # TODO there ought be a better way than using a regex
-    m = IDENTITY_RE.match(adsrc)
-    if m:
+    if m := IDENTITY_RE.match(adsrc):
         return m.group('seed'), m.group('step')
     else:
         return None
@@ -294,12 +288,11 @@ def get_grants(schema_name, table_name, current_user):
             grant_statements.append(
                 "grant %s on %s.%s to \"%s\";" % (grant[2].lower(), schema_name, table_name, grant[4]))
 
-    if len(grant_statements) > 0:
+    if grant_statements:
         return grant_statements
-    else:
-        if debug:
-            comment('Found no table grants to extend to the new table')
-        return None
+    if debug:
+        comment('Found no table grants to extend to the new table')
+    return None
 
 
 def get_foreign_keys(schema_name, set_target_schema, table_name):
@@ -323,14 +316,14 @@ def get_foreign_keys(schema_name, set_target_schema, table_name):
 
     for fk in foreign_keys:
         has_fks = True
-        references_clause = fk[1].replace('REFERENCES ', 'REFERENCES %s.' % set_target_schema)
+        references_clause = fk[1].replace(
+            'REFERENCES ', f'REFERENCES {set_target_schema}.'
+        )
+
         fk_statements.append(
             'alter table %s."%s" add constraint %s %s;' % (set_target_schema, table_name, fk[0], references_clause))
 
-    if has_fks:
-        return fk_statements
-    else:
-        return None
+    return fk_statements if has_fks else None
 
 
 def get_primary_key(schema_name, set_target_schema, original_table, new_table):
@@ -360,12 +353,9 @@ order by att.attnum;
         has_pks = True
         pk_statement = pk_statement + pk[0] + ','
 
-    pk_statement = pk_statement[:-1] + ');'
+    pk_statement = f'{pk_statement[:-1]});'
 
-    if has_pks:
-        return pk_statement
-    else:
-        return None
+    return pk_statement if has_pks else None
 
 
 def get_table_desc(schema_name, table_name):
@@ -386,7 +376,7 @@ def get_table_desc(schema_name, table_name):
     descr = {}
     for row in description:
         if debug:
-            comment("Table Description: %s" % str(row))
+            comment(f"Table Description: {str(row)}")
         descr[row[0]] = row
 
     return descr
@@ -405,9 +395,7 @@ def get_count_raw_columns(schema_name, table_name):
     if debug:
         comment(statement)
 
-    description = execute_query(statement)
-
-    return description
+    return execute_query(statement)
 
 
 def run_commands(conn, commands):
@@ -415,7 +403,7 @@ def run_commands(conn, commands):
 
     for c in commands:
         if c is not None:
-            comment('[%s] Running %s' % (str(os.getpid()), c))
+            comment(f'[{str(os.getpid())}] Running {c}')
             try:
                 if c.count(';') > 1:
                     subcommands = c.split(';')
@@ -482,15 +470,18 @@ def reduce_column_length(col_type, column_name, table_name):
             time.sleep(2 ** col_len_attempt_count * RETRY_TIMEOUT)
 
     if col_len_result is None:
-        if col_len_last_exception is not None:
-            print("Unable to determine length of %s for table %s due to Exception %s" % (
-                column_name, table_name, col_len_last_exception.message))
-            raise col_len_last_exception
+        if col_len_last_exception is None:
+            print(
+                f"Unable to determine length of {column_name} for table {table_name} due to Null response to query. No changes will be made"
+            )
+
+
         else:
             print(
-                "Unable to determine length of %s for table %s due to Null response to query. No changes will be made" % (
-                    column_name, table_name))
+                f"Unable to determine length of {column_name} for table {table_name} due to Exception {col_len_last_exception.message}"
+            )
 
+            raise col_len_last_exception
     if "varchar" in col_type:
         new_column_len = int(col_max_len * (1 + COL_LENGTH_EXPANSION_BUFFER))
 
@@ -499,9 +490,7 @@ def reduce_column_length(col_type, column_name, table_name):
             return col_type
 
         # if the new length would be smaller than the specified new varchar minimum then set to varchar minimum
-        if new_column_len < new_varchar_min:
-            new_column_len = new_varchar_min
-
+        new_column_len = max(new_column_len, new_varchar_min)
         # if the new length would be 0 then return the current value - no changes
         if new_column_len == 0:
             return col_type
@@ -514,14 +503,11 @@ def reduce_column_length(col_type, column_name, table_name):
 
         if new_column_len < curr_col_length:
             set_col_type = re.sub(str(curr_col_length), str(new_column_len), col_type)
-    else:
-        # Test to see if largest value is smaller than largest value of smallint (2 bytes)
-        if col_max_len * (1 + COL_LENGTH_EXPANSION_BUFFER) <= int(math.pow(2, 15) - 1) and col_type != "smallint":
+    elif col_max_len * (1 + COL_LENGTH_EXPANSION_BUFFER) <= int(math.pow(2, 15) - 1) and col_type != "smallint":
 
-            set_col_type = re.sub(col_type, "smallint", col_type)
-        # Test to see if largest value is smaller than largest value of smallint (4 bytes)
-        elif col_max_len * (1 + COL_LENGTH_EXPANSION_BUFFER) <= int(math.pow(2, 31) - 1) and col_type != "integer":
-            set_col_type = re.sub(col_type, "integer", col_type)
+        set_col_type = re.sub(col_type, "smallint", col_type)
+    elif col_max_len * (1 + COL_LENGTH_EXPANSION_BUFFER) <= int(math.pow(2, 31) - 1) and col_type != "integer":
+        set_col_type = re.sub(col_type, "integer", col_type)
 
     return set_col_type
 

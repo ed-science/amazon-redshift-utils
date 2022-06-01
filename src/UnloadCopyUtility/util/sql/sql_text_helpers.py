@@ -23,18 +23,21 @@ class SQLRedactor:
     @staticmethod
     def remove_string_value_from_key_equal_sign_value_pair(key_to_redact, input_string):
         output_string = input_string
-        for match in re.finditer(r'(' + key_to_redact + '=[^\'; ]+)', input_string.lower()):
-            for i in range(0, len(match.groups())):
+        for match in re.finditer(f'({key_to_redact}' + '=[^\'; ]+)', output_string.lower()):
+            for i in range(len(match.groups())):
                 string_to_replace = output_string[match.start(i):match.end(i)]
-                output_string = output_string.replace(string_to_replace,
-                                                      key_to_redact + '=' + SQLRedactor.REDACTION_STRING)
+                output_string = output_string.replace(
+                    string_to_replace,
+                    f'{key_to_redact}={SQLRedactor.REDACTION_STRING}',
+                )
+
         return output_string
 
     @staticmethod
     def remove_keyword_value(keyword_to_redact, input_string):
         output_string = input_string
-        for match in re.finditer(r'(' + keyword_to_redact + "[ \n]+'[^']*')", input_string.lower()):
-            for i in range(0, len(match.groups())):
+        for match in re.finditer(f'({keyword_to_redact}' + "[ \n]+'[^']*')", output_string.lower()):
+            for i in range(len(match.groups())):
                 string_to_replace = output_string[match.start(i):match.end(i)]
                 safe_string = keyword_to_redact + " '" + SQLRedactor.REDACTION_STRING + "'"
                 output_string = output_string.replace(string_to_replace, safe_string)
@@ -69,7 +72,13 @@ class SQLTextHelper:
                 return sql_text
 
             if end_position > start_position:
-                sql_text = sql_text[0:start_position] + sql_text[end_position+len(SQLTextHelper.BLOCK_COMMENT_END):]
+                sql_text = (
+                    sql_text[:start_position]
+                    + sql_text[
+                        end_position + len(SQLTextHelper.BLOCK_COMMENT_END) :
+                    ]
+                )
+
                 end_position = -20
         return sql_text
 
@@ -86,20 +95,20 @@ class SQLTextHelper:
                     is_in_single_line_comment = False
                 else:
                     continue
-            if is_in_token is not None:
+            if (
+                is_in_token is None
+                and (last_letter != '-' or letter != '-')
+                or is_in_token is not None
+            ):
                 result_sql_text += letter
             else:
-                if not (last_letter == '-' and letter == '-'):
-                    result_sql_text += letter
-                else:
-                    is_in_single_line_comment = True
-                    result_sql_text = result_sql_text[:-1]
+                is_in_single_line_comment = True
+                result_sql_text = result_sql_text[:-1]
             if letter in SQLTextHelper.TOKEN_SEPARATOR:
                 if is_in_token is None:
                     is_in_token = letter
-                else:
-                    if letter == is_in_token:
-                        is_in_token = None
+                elif letter == is_in_token:
+                    is_in_token = None
             last_letter = letter
 
         return SQLTextHelper.remove_empty_lines(result_sql_text)
@@ -125,17 +134,17 @@ class SQLTextHelper:
         last_letter = 'a'
         result_sql_text = ''
         for letter in sql_text:
-            if is_in_token is not None:
+            if (
+                is_in_token is None
+                and (last_letter != ' ' or letter != ' ')
+                or is_in_token is not None
+            ):
                 result_sql_text += letter
-            else:
-                if not (last_letter == ' ' and letter == ' '):
-                    result_sql_text += letter
             if letter in SQLTextHelper.TOKEN_SEPARATOR:
                 if is_in_token is None:
                     is_in_token = letter
-                else:
-                    if letter == is_in_token:
-                        is_in_token = None
+                elif letter == is_in_token:
+                    is_in_token = None
             last_letter = letter
         return result_sql_text.strip()
 

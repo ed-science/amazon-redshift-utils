@@ -128,13 +128,10 @@ def normalise_config(config):
 def extract_value(constant, config):
     if constant in config:
         return config[constant]
-    else:
-        if constant not in config_aliases:
-            return None
-        else:
-            value = config_aliases[constant]
-            for v in value:
-                if v in config and config[v] != "":
-                    return config[v]
+    if constant in config_aliases:
+        value = config_aliases[constant]
+        for v in value:
+            if v in config and config[v] != "":
+                return config[v]
 
-            return None
+    return None

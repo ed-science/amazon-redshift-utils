@@ -22,7 +22,10 @@ class TableDDLHelperTests(TestCase):
     def test_remove_line_comment_must_not_influence_string_literals(self):
         input_sql = """select '--DROP TABLE "';"""
         expected_sql = input_sql
-        self.assertEquals(expected_sql, SQLTextHelper.get_sql_without_comments(input_sql_text=input_sql))
+        self.assertEquals(
+            expected_sql,
+            SQLTextHelper.get_sql_without_comments(input_sql_text=expected_sql),
+        )
 
     def test_remove_2_line_comments(self):
         input_sql = """-- things more difficult

@@ -141,7 +141,7 @@ class Task(object):
         pass
 
     def __str__(self):
-        return self.__class__.__name__ + '(' + str(self.task_id) + ')'
+        return f'{self.__class__.__name__}({str(self.task_id)})'
 
 
 class FailIfResourceDoesNotExistsTask(Task):
@@ -163,7 +163,7 @@ class FailIfResourceClusterDoesNotExistsTask(Task):
 
     def execute(self):
         res = self.source_resource.get_cluster().get_query_full_result_as_list_of_dict('select 1 as result')
-        if not res[0]['result'] == 1:
+        if res[0]['result'] != 1:
             raise Resource.NotFound('Cluster of resource {r} could not be queried.'.format(r=self.source_resource))
 
 

@@ -42,13 +42,11 @@ class S3Helper:
         if len(keys_to_delete) > 1000:
             raise Exception('Batch delete only supports a maximum of 1000 keys at a time')
 
-        object_list = []
-        for key in keys_to_delete:
-            object_list.append({'Key': key})
+        object_list = [{'Key': key} for key in keys_to_delete]
         self.s3_client.delete_objects(Bucket=bucket_name, Delete={'Objects': object_list})
 
     def delete_s3_prefix(self, s3_details):
-        print("Cleaning up S3 Data Staging Location %s" % s3_details.dataStagingPath)
+        print(f"Cleaning up S3 Data Staging Location {s3_details.dataStagingPath}")
         (stagingBucket, stagingPrefix) = S3Helper.tokenize_s3_path(s3_details.dataStagingRoot)
 
         objects = self.s3_client.list_objects_v2(Bucket=stagingBucket, Prefix=stagingPrefix)
@@ -107,60 +105,58 @@ class S3Details:
     def __init__(self, config_helper, source_table, encryption_key_id=None):
         if 's3Staging' not in config_helper.config:
             raise S3Details.NoS3StagingInformationFoundException()
+        s3_staging_conf = config_helper.config['s3Staging']
+        if 'region' in s3_staging_conf:
+            self.dataStagingRegion = s3_staging_conf['region']
         else:
-            s3_staging_conf = config_helper.config['s3Staging']
-            if 'region' in s3_staging_conf:
-                self.dataStagingRegion = s3_staging_conf['region']
-            else:
-                logging.warning('No region in s3_staging_conf')
-                self.dataStagingRegion = None
+            logging.warning('No region in s3_staging_conf')
+            self.dataStagingRegion = None
 
-            if 'deleteOnSuccess' in s3_staging_conf \
-                    and s3_staging_conf['deleteOnSuccess'].lower() == 'true':
-                self.deleteOnSuccess = True
-            else:
-                self.deleteOnSuccess = False
+        self.deleteOnSuccess = (
+            'deleteOnSuccess' in s3_staging_conf
+            and s3_staging_conf['deleteOnSuccess'].lower() == 'true'
+        )
 
-            if 'path' in s3_staging_conf:
-                # datetime alias for operations
-                self.nowString = "{:%Y-%m-%d_%H:%M:%S}".format(datetime.datetime.now())
-                self.dataStagingRoot = "{s3_stage_path}/{timestamp}-{table_name}/".format(
-                    s3_stage_path=s3_staging_conf['path'].rstrip("/"),
-                    timestamp=self.nowString,
-                    table_name=source_table.get_table()
-                )
-                self.dataStagingPath = "{root}{db_name}.{schema_name}.{table_name}".format(
-                    root=self.dataStagingRoot,
-                    db_name=source_table.get_db(),
-                    schema_name=source_table.get_schema(),
-                    table_name=source_table.get_table())
+        if 'path' in s3_staging_conf:
+            # datetime alias for operations
+            self.nowString = "{:%Y-%m-%d_%H:%M:%S}".format(datetime.datetime.now())
+            self.dataStagingRoot = "{s3_stage_path}/{timestamp}-{table_name}/".format(
+                s3_stage_path=s3_staging_conf['path'].rstrip("/"),
+                timestamp=self.nowString,
+                table_name=source_table.get_table()
+            )
+            self.dataStagingPath = "{root}{db_name}.{schema_name}.{table_name}".format(
+                root=self.dataStagingRoot,
+                db_name=source_table.get_db(),
+                schema_name=source_table.get_schema(),
+                table_name=source_table.get_table())
 
-            if not self.dataStagingPath or not self.dataStagingPath.startswith("s3://"):
-                raise S3Details.S3StagingPathMustStartWithS3
+        if not self.dataStagingPath or not self.dataStagingPath.startswith("s3://"):
+            raise S3Details.S3StagingPathMustStartWithS3
 
-            if 'aws_iam_role' in s3_staging_conf:
-                role = s3_staging_conf['aws_iam_role']
-                self.access_credentials = S3AccessCredentialsRole(role)
-            elif 'aws_access_key_id' in s3_staging_conf and 'aws_secret_access_key' in s3_staging_conf:
-                kms_helper = KMSHelper(config_helper.s3_helper.region_name)
-                key_id = kms_helper.decrypt(s3_staging_conf['aws_access_key_id']).decode('utf-8')
-                secret_key = kms_helper.decrypt(s3_staging_conf['aws_secret_access_key']).decode('utf-8')
-                self.access_credentials = S3AccessCredentialsKey(key_id, secret_key)
-            else:
-                raise(S3Details.NoS3CredentialsFoundException())
+        if 'aws_iam_role' in s3_staging_conf:
+            role = s3_staging_conf['aws_iam_role']
+            self.access_credentials = S3AccessCredentialsRole(role)
+        elif 'aws_access_key_id' in s3_staging_conf and 'aws_secret_access_key' in s3_staging_conf:
+            kms_helper = KMSHelper(config_helper.s3_helper.region_name)
+            key_id = kms_helper.decrypt(s3_staging_conf['aws_access_key_id']).decode('utf-8')
+            secret_key = kms_helper.decrypt(s3_staging_conf['aws_secret_access_key']).decode('utf-8')
+            self.access_credentials = S3AccessCredentialsKey(key_id, secret_key)
+        else:
+            raise(S3Details.NoS3CredentialsFoundException())
 
-            use_kms = True
-            if 'kmsGeneratedKey' in s3_staging_conf:
-                if s3_staging_conf['kmsGeneratedKey'].lower() == 'false':
-                    use_kms = False
+        use_kms = (
+            'kmsGeneratedKey' not in s3_staging_conf
+            or s3_staging_conf['kmsGeneratedKey'].lower() != 'false'
+        )
 
-            if use_kms:
-                kms_helper = KMSHelper(config_helper.s3_helper.region_name)
-                self.symmetric_key = kms_helper.generate_base64_encoded_data_key(encryption_key_id)
-            else:
-                self.symmetric_key = base64.b64encode(KMSHelper.generate_data_key_without_kms())
-            # noinspection PyBroadException
-            try:
-                self.symmetric_key = self.symmetric_key.decode('utf-8')
-            except:
-                logging.debug('Exception converting string can be ignored, likely Python2 so already a string.')
+        if use_kms:
+            kms_helper = KMSHelper(config_helper.s3_helper.region_name)
+            self.symmetric_key = kms_helper.generate_base64_encoded_data_key(encryption_key_id)
+        else:
+            self.symmetric_key = base64.b64encode(KMSHelper.generate_data_key_without_kms())
+        # noinspection PyBroadException
+        try:
+            self.symmetric_key = self.symmetric_key.decode('utf-8')
+        except:
+            logging.debug('Exception converting string can be ignored, likely Python2 so already a string.')

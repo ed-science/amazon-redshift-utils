@@ -62,12 +62,12 @@ class StackParametersBuilderUnittests(TestCase):
 
     def set_cloudformation_stubber_for_client(self, redshift_client):
         stubber = Stubber(redshift_client)
-        with open(self.resource_path+'/DescribeSourceClusterResponse.json') as describe_source_response:
+        with open(f'{self.resource_path}/DescribeSourceClusterResponse.json') as describe_source_response:
             describe_source_cluster_response = json.load(describe_source_response)
         expected_source_params = {'ClusterIdentifier': 'rscopyunloadtest3-redshiftclustersource-1so4t2ip0ei3a'}
         stubber.add_response('describe_clusters', describe_source_cluster_response, expected_source_params)
 
-        with open(self.resource_path+'/DescribeTargetClusterResponse.json') as describe_target_response:
+        with open(f'{self.resource_path}/DescribeTargetClusterResponse.json') as describe_target_response:
             describe_target_cluster_response = json.load(describe_target_response)
         expected_target_params = {'ClusterIdentifier': 'rscopyunloadtest3-redshiftclustertarget-oaw35zvu02h'}
         stubber.add_response('describe_clusters', describe_target_cluster_response, expected_target_params)

@@ -107,8 +107,7 @@ class Resource(object):
             self.msg = msg
 
         def __str__(self):
-            s = super(Resource.NotFound, self).__str__() + '\n\t' + self.msg
-            return s
+            return super(Resource.NotFound, self).__str__() + '\n\t' + self.msg
 
     class CreateSQLNotSet(NotFound):
         def __init__(self, msg):
@@ -169,13 +168,13 @@ class DBResource(Resource):
                self.get_cluster() == other.get_cluster()
 
     def __str__(self):
-        return self.get_cluster().get_host() + ':' + str(self.get_db())
+        return f'{self.get_cluster().get_host()}:{str(self.get_db())}'
 
     def get_query_sql_text_with_parameters_replaced(self, sql_text):
         param_dict = {}
         for match_group in re.finditer(r'({[^}{]*})', sql_text):
             parameter_name = match_group.group().lstrip('{').rstrip('}')
-            method = getattr(self, 'get_' + parameter_name)
+            method = getattr(self, f'get_{parameter_name}')
             param_dict[parameter_name] = method()
 
         return sql_text.format(**param_dict)
@@ -241,7 +240,7 @@ class SchemaResource(DBResource, ChildObject):
                DBResource.__eq__(self, other)
 
     def __str__(self):
-        return super(SchemaResource, self).__str__() + '.' + str(self.get_schema())
+        return f'{super(SchemaResource, self).__str__()}.{str(self.get_schema())}'
 
     def get_statement_to_retrieve_ddl_create_statement_text(self):
         return SchemaDDLHelper().get_schema_ddl_SQL(schema_name=self.get_schema())
@@ -305,7 +304,7 @@ class TableResource(SchemaResource):
                SchemaResource.__eq__(self, other)
 
     def __str__(self):
-        return super(TableResource, self).__str__() + '.' + str(self.get_table())
+        return f'{super(TableResource, self).__str__()}.{str(self.get_table())}'
 
     def get_statement_to_retrieve_ddl_create_statement_text(self):
         return TableDDLHelper().get_table_ddl_SQL(table_name=self.get_table(), schema_name=self.get_schema())

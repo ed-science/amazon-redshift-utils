@@ -48,17 +48,17 @@ def connect(host, port, db, dbuser, table, schema, column_list, partition_column
     # Connect to the cluster
     try:
         if debug:
-            print('Connecting to Redshift: %s' % host)
+            print(f'Connecting to Redshift: {host}')
 
         conn = pg8000.connect(database=db, user=dbuser, password=pwd, host=host, port=port, ssl=ssl)
         conn.autocommit = True
     except:
-        print('Redshift Connection Failed: exception %s' % sys.exc_info()[1])
+        print(f'Redshift Connection Failed: exception {sys.exc_info()[1]}')
         raise
-    
+
     if debug:
         print('Successfully connected to Redshift cluster')
-        
+
     # create a new cursor
     cursor = conn.cursor()
 
@@ -79,7 +79,7 @@ def check_table_exists(cursor, conn, table, schema):
 
     # check if table exists
     if debug:
-        print('Check for table exists: %s' % table)
+        print(f'Check for table exists: {table}')
 
     stmt = "SELECT EXISTS (SELECT 1 FROM   information_schema.tables WHERE  table_schema = '%s' AND table_name = '%s');" % (schema, table)
     cursor.execute(stmt)
@@ -88,10 +88,10 @@ def check_table_exists(cursor, conn, table, schema):
     s = ' '.join(map(str, s))
 
     if s == 'False':
-        print('Table does not exist: %s' % table)
+        print(f'Table does not exist: {table}')
         exit(1)
     else:
-        print('Table %s exists' % table)
+        print(f'Table {table} exists')
 
 
 def get_column_list_partition_keys(cursor, conn, table, schema, column_list, partition_column):
@@ -101,13 +101,16 @@ def get_column_list_partition_keys(cursor, conn, table, schema, column_list, par
     table, schema, partition_column)
 
     if debug:
-        print('Collecting data type information for partition column: %s' % partition_column)
+        print(
+            f'Collecting data type information for partition column: {partition_column}'
+        )
+
 
     cursor.execute(stmt)
     partition_column_type = cursor.fetchone()
 
     if partition_column_type is None:
-        print('Please check your partition column: %s' % partition_column)
+        print(f'Please check your partition column: {partition_column}')
         exit(1)
 
     partition_column_type = ' '.join(map(str, partition_column_type))
@@ -123,7 +126,7 @@ def get_column_list_partition_keys(cursor, conn, table, schema, column_list, par
         stmt = "select column_name from information_schema.columns where table_name = '%s' and table_schema = '%s' order by ordinal_position;" % (table, schema)
 
         if debug:
-            print('Collecting column list excluding partition column: %s' % partition_column)
+            print(f'Collecting column list excluding partition column: {partition_column}')
 
         cursor.execute(stmt)
         column_list = cursor.fetchall()
@@ -136,16 +139,19 @@ def get_column_list_partition_keys(cursor, conn, table, schema, column_list, par
 
 
     # get distinct partition keys using partition column
-    stmt = "select distinct %s from %s.%s;" % (partition_column, schema, table)
+    stmt = f"select distinct {partition_column} from {schema}.{table};"
 
     if debug:
-        print('Collecting distinct partition keys for partition column: %s [skipping NULL values]' % partition_column)
+        print(
+            f'Collecting distinct partition keys for partition column: {partition_column} [skipping NULL values]'
+        )
+
 
     cursor.execute(stmt)
     keys = cursor.fetchall()
     partition_keys = [x[0] for x in keys]
 
-    print('Column list = %s' % full_column_list)
+    print(f'Column list = {full_column_list}')
     # print('Partition keys = %s' % partition_keys)
     return full_column_list, partition_keys, partition_column_type
 
@@ -169,9 +175,11 @@ def gen_unload(full_column_list, partition_keys, partition_column_type, schema, 
     column_list_str = full_column_list
 
     if sort_keys:
-        sql = 'SELECT ' + column_list_str + ' FROM ' + schema + '.' + table + ' WHERE ' + partition_column + '=' + '<>' + ' ORDER BY ' + sort_keys
+        sql = f'SELECT {column_list_str} FROM {schema}.{table} WHERE {partition_column}=<> ORDER BY {sort_keys}'
+
     else:
-        sql = 'SELECT ' + column_list_str + ' FROM ' + schema + '.' + table + ' WHERE ' + partition_column + '=' + '<>'
+        sql = f'SELECT {column_list_str} FROM {schema}.{table} WHERE {partition_column}=<>'
+
 
     part1 = 'UNLOAD ( ' + '\'' + sql + '\''
     part3 = 'IAM_ROLE \'' + iamrole + '\' FORMAT PARQUET ALLOWOVERWRITE;'
@@ -193,7 +201,7 @@ def gen_unload(full_column_list, partition_keys, partition_column_type, schema, 
 
 
 def execute_unload(cursor, conn):
-    with open(os.path.dirname(__file__) + 'unload.sql', 'r') as sql:
+    with open(f'{os.path.dirname(__file__)}unload.sql', 'r') as sql:
         unload_commands = sql.read()
 
     for s in unload_commands.split(";"):
